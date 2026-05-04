@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tourly",
-  description: "Interactive 360° virtual tours for real estate agents.",
+  title: "VITA · by CGMIMM",
+  description:
+    "VITA — Virtual Interactive Tour Application. AI-powered 360° tours for real estate, by CGMIMM.",
 };
 
 export default function RootLayout({

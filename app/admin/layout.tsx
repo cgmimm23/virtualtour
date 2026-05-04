@@ -1,8 +1,9 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/auth";
+import { Logo } from "@/components/brand/logo";
 
 export const metadata = {
-  title: "Tourly admin",
+  title: "VITA admin",
   robots: { index: false, follow: false },
 };
 
@@ -27,11 +28,11 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       <header className="sticky top-0 z-30 border-b border-neutral-200 bg-white">
         <div className="mx-auto flex h-14 max-w-7xl items-center justify-between gap-6 px-6">
           <div className="flex items-center gap-6">
-            <Link href="/admin" className="flex items-center gap-2 font-semibold text-brand-700">
-              <span className="rounded-md bg-brand-600 px-1.5 py-0.5 text-xs font-bold uppercase tracking-wider text-white">
+            <Link href="/admin" className="flex items-center gap-2">
+              <Logo compact />
+              <span className="rounded-md bg-brand-600 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">
                 Admin
               </span>
-              Tourly
             </Link>
             <nav className="hidden items-center gap-4 text-sm md:flex">
               {NAV.map((item) => (
