@@ -71,3 +71,28 @@ export async function requireActiveTeam(currentPath = "/dashboard"): Promise<Act
   }
   return active;
 }
+
+// Platform / super-admin helpers. Backed by the `platform_admins` table
+// (db/migrations/0004_platform_admins.sql). Distinct from team_members.role —
+// these are people who can see across every team.
+
+export const isPlatformAdmin = cache(async (): Promise<boolean> => {
+  const user = await getUser();
+  if (!user) return false;
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc("is_platform_admin");
+  if (error || data === null || data === undefined) return false;
+  return Boolean(data);
+});
+
+export async function requirePlatformAdmin(currentPath = "/admin"): Promise<UserRow> {
+  const user = await requireUser(currentPath);
+  const ok = await isPlatformAdmin();
+  if (!ok) {
+    // Surface a 404 to non-admins rather than 403 — they shouldn't even know
+    // /admin exists. notFound() throws a Next-recognized signal.
+    const { notFound } = await import("next/navigation");
+    notFound();
+  }
+  return user;
+}

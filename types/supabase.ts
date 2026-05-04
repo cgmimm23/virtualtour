@@ -226,12 +226,28 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["tour_views"]["Insert"]>;
         Relationships: [];
       };
+      platform_admins: {
+        Row: {
+          user_id: string;
+          created_at: string;
+        };
+        Insert: {
+          user_id: string;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["platform_admins"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
       public_tour_by_slug: {
         Args: { p_slug: string };
         Returns: unknown;
+      };
+      is_platform_admin: {
+        Args: Record<string, never>;
+        Returns: boolean;
       };
       submit_public_lead: {
         Args: {
