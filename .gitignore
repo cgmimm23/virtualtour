@@ -12,3 +12,9 @@ build/
 next-env.d.ts.bak
 .idea/
 .vscode/
+
+# Claude Code: machine-local permission allowlist + prefs (the .local suffix
+# means "do not commit"). Project-shared agent / hook configs would live in
+# .claude/settings.json (no .local) and stay tracked.
+.claude/settings.local.json
+
