@@ -220,10 +220,10 @@ function DemoBlock() {
                   Open the live tour →
                 </Link>
                 <Link
-                  href="/t/kremmen-place"
+                  href="/signup"
                   className="rounded-lg border border-white/30 px-4 py-2 text-sm font-semibold text-white hover:bg-white/10"
                 >
-                  See the editor
+                  Try the editor →
                 </Link>
               </div>
             </div>

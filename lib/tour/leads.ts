@@ -1,37 +1,8 @@
+// Lead utilities: scoring, CSV export, optional outbound webhook, and the
+// per-session "gate passed" cache. Persistence lives elsewhere now —
+// `lib/tour/lead-actions.ts` for server-side, RPC-backed mutations.
+
 import type { Lead } from "./types";
-
-const KEY_PREFIX = "tourly:leads:";
-
-export function loadLeads(slug: string): Lead[] {
-  if (typeof window === "undefined") return [];
-  try {
-    const raw = window.localStorage.getItem(KEY_PREFIX + slug);
-    return raw ? (JSON.parse(raw) as Lead[]) : [];
-  } catch {
-    return [];
-  }
-}
-
-export function appendLead(lead: Lead): Lead[] {
-  if (typeof window === "undefined") return [];
-  const existing = loadLeads(lead.tourSlug);
-  const next = [lead, ...existing];
-  try {
-    window.localStorage.setItem(KEY_PREFIX + lead.tourSlug, JSON.stringify(next));
-  } catch {
-    // ignore quota
-  }
-  return next;
-}
-
-export function clearLeads(slug: string): void {
-  if (typeof window === "undefined") return;
-  try {
-    window.localStorage.removeItem(KEY_PREFIX + slug);
-  } catch {
-    // ignore
-  }
-}
 
 export function leadsToCsv(leads: Lead[]): string {
   const headers = [

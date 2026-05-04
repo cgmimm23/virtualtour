@@ -132,7 +132,7 @@ export default function PricingPage() {
                   <span className="text-sm text-neutral-500">/mo</span>
                 </div>
                 <Link
-                  href="/t/kremmen-place"
+                  href="/signup"
                   className={`mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-semibold ${
                     t.highlight
                       ? "bg-amber-400 text-neutral-900 hover:bg-amber-300"

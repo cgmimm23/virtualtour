@@ -50,16 +50,16 @@ function Header() {
         </nav>
         <div className="flex items-center gap-2">
           <Link
-            href="/t/kremmen-place"
+            href="/login"
             className="hidden rounded-md px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 sm:inline"
           >
-            Open editor
+            Sign in
           </Link>
           <Link
-            href="/t/kremmen-place?view=1"
+            href="/signup"
             className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
           >
-            Try the demo →
+            Get started →
           </Link>
         </div>
       </div>

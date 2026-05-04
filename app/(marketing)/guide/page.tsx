@@ -103,10 +103,10 @@ export default function GuideIndex() {
             you through the rest.
           </p>
           <Link
-            href="/t/kremmen-place"
+            href="/signup"
             className="mt-7 inline-block rounded-lg bg-neutral-900 px-5 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
           >
-            Open the editor with the demo tour →
+            Create an account to start →
           </Link>
         </div>
       </section>

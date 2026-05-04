@@ -1,15 +1,9 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
-import { kremmenPlaceTour } from "@/lib/tour/kremmen-place";
-import { TourExperience } from "@/components/tour-editor/tour-experience";
+import { fetchPublicTourBySlug } from "@/lib/tour/public";
+import { PublicTourExperience } from "@/components/tour-editor/public-tour-experience";
 import type { Tour } from "@/lib/tour/types";
-
-// In M1 the tour catalog is a hardcoded map. M2+ replaces this with a Supabase
-// query against `tours` joined to `scenes` joined to `hotspots`.
-const TOURS: Record<string, Tour> = {
-  [kremmenPlaceTour.slug]: kremmenPlaceTour,
-};
 
 interface PageProps {
   params: Promise<{ slug: string }>;
@@ -17,7 +11,7 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const tour = TOURS[slug];
+  const tour = await fetchPublicTourBySlug(slug);
   if (!tour) return {};
   const cover = tour.scenes.find((s) => s.id === tour.coverSceneId) ?? tour.scenes[0];
   const desc = describe(tour);
@@ -41,7 +35,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TourPage({ params }: PageProps) {
   const { slug } = await params;
-  const tour = TOURS[slug];
+  const tour = await fetchPublicTourBySlug(slug);
   if (!tour) notFound();
 
   return (
@@ -51,15 +45,17 @@ export default async function TourPage({ params }: PageProps) {
         // RealEstateListing JSON-LD lets Google show the listing as a rich result.
         dangerouslySetInnerHTML={{ __html: JSON.stringify(buildJsonLd(tour)) }}
       />
-      <Suspense fallback={<div className="tour-stage flex items-center justify-center text-white/60 text-sm">Loading…</div>}>
-        <TourExperience baseTour={tour} />
+      <Suspense
+        fallback={
+          <div className="tour-stage flex items-center justify-center text-white/60 text-sm">
+            Loading…
+          </div>
+        }
+      >
+        <PublicTourExperience tour={tour} />
       </Suspense>
     </>
   );
-}
-
-export function generateStaticParams() {
-  return Object.keys(TOURS).map((slug) => ({ slug }));
 }
 
 function describe(tour: Tour): string {

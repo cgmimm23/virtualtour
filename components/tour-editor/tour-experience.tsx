@@ -7,12 +7,13 @@ import type {
   BrandingConfig,
   Hotspot,
   HotspotPayload,
+  Lead,
   ListingDetails,
   Scene,
   Tour,
 } from "@/lib/tour/types";
-import { applyOverrides, clearTourOverrides, saveTourOverrides } from "@/lib/tour/storage";
-import { appendLead, fireLeadWebhook, hasGateBeenPassed, markGatePassed } from "@/lib/tour/leads";
+import { fireLeadWebhook, hasGateBeenPassed, markGatePassed } from "@/lib/tour/leads";
+import { newId } from "@/lib/tour/id";
 import { ScenePicker } from "./scene-picker";
 import { HotspotPanel } from "./hotspot-panel";
 import { InfoModal } from "./info-modal";
@@ -51,8 +52,33 @@ const TourViewer = dynamic(
 const HISTORY_LIMIT = 50;
 const AUTO_PLAY_INTERVAL_MS = 6000;
 
+export interface PublicLeadInput {
+  email: string;
+  name?: string;
+  phone?: string;
+  preferredTime?: string;
+  source: Lead["source"];
+  scenesViewed: number;
+  durationMs: number;
+}
+
 interface TourExperienceProps {
   baseTour: Tour;
+  /**
+   * When true, the editor toolbar is rendered and edits are persisted via
+   * `onSaveTour`. When false (the default), the component renders the
+   * read-only public viewer. /t/[slug] passes canEdit=false; the dashboard
+   * editor passes canEdit=true after the team-membership check.
+   */
+  canEdit?: boolean;
+  /** Called (debounced) whenever the in-memory tour changes in edit mode. */
+  onSaveTour?: (tour: Tour) => Promise<{ ok: boolean; error?: string }>;
+  /** Submits a lead from the public viewer. Required for lead capture. */
+  onSubmitLead?: (input: PublicLeadInput) => Promise<{ ok: boolean; error?: string }>;
+  /** Loads leads for the agent-side LeadsModal. */
+  onLoadLeads?: () => Promise<Lead[]>;
+  /** Resets the in-memory tour to baseTour and persists. Optional. */
+  onResetTour?: () => Promise<void> | void;
 }
 
 interface ClipboardHotspot {
@@ -60,13 +86,27 @@ interface ClipboardHotspot {
   fromSceneId: string;
 }
 
-export function TourExperience({ baseTour }: TourExperienceProps) {
+const SAVE_DEBOUNCE_MS = 800;
+
+export function TourExperience({
+  baseTour,
+  canEdit = false,
+  onSaveTour,
+  onSubmitLead,
+  onLoadLeads,
+  onResetTour,
+}: TourExperienceProps) {
   const searchParams = useSearchParams();
   const isEmbedMode = searchParams.get("embed") === "1";
   const isKioskMode = searchParams.get("kiosk") === "1";
   const isPreviewMode = searchParams.get("preview") === "1";
   const isNoBrandMode = searchParams.get("nobrand") === "1";
-  const isShareMode = isEmbedMode || isKioskMode || isPreviewMode || searchParams.get("view") === "1";
+  const isShareMode =
+    !canEdit ||
+    isEmbedMode ||
+    isKioskMode ||
+    isPreviewMode ||
+    searchParams.get("view") === "1";
 
   const [tour, setTour] = useState<Tour>(baseTour);
   const [hydrated, setHydrated] = useState(false);
@@ -104,24 +144,58 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
   // Distinguishes whether the contact gate was triggered by the agent card vs. an in-scene contact hotspot.
   const contactSourceRef = useRef<"contact_button" | "in_scene_contact">("contact_button");
 
-  // Hydrate overrides + leads gate state from storage on first mount.
+  // Save-status state. Declared up front so the reset effect below can poke
+  // the lastSaveSerializedRef when the upstream tour swaps.
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "error">(
+    "idle",
+  );
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const saveTimerRef = useRef<number | null>(null);
+  // Seed with baseTour so the first mount doesn't trigger a no-op save.
+  const lastSaveSerializedRef = useRef<string>(JSON.stringify(baseTour));
+
+  // Reset local state when the upstream tour changes (e.g. after server save
+  // revalidates the page). Per-session state (lead-gate-passed, scene
+  // tracking) still comes from sessionStorage on first mount.
   useEffect(() => {
-    const merged = applyOverrides(baseTour);
-    setTour(merged);
-    historyRef.current = [merged];
+    setTour(baseTour);
+    historyRef.current = [baseTour];
     setHistoryIndex(0);
-    setCurrentSceneId(merged.coverSceneId);
+    setCurrentSceneId(baseTour.coverSceneId);
     setHydrated(true);
     setGatePassed(hasGateBeenPassed(baseTour.slug));
     sessionStartRef.current = Date.now();
-    scenesViewedRef.current = new Set([merged.coverSceneId]);
+    scenesViewedRef.current = new Set([baseTour.coverSceneId]);
+    // Re-seed the save guard so a server-pushed revalidate doesn't bounce
+    // straight back as another save.
+    lastSaveSerializedRef.current = JSON.stringify(baseTour);
   }, [baseTour]);
 
-  // Persist tour edits.
   useEffect(() => {
     if (!hydrated) return;
-    saveTourOverrides(tour);
-  }, [tour, hydrated]);
+    if (!canEdit || !onSaveTour) return;
+
+    const serialized = JSON.stringify(tour);
+    if (serialized === lastSaveSerializedRef.current) return;
+
+    if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = window.setTimeout(async () => {
+      setSaveStatus("saving");
+      const result = await onSaveTour(tour);
+      if (result.ok) {
+        lastSaveSerializedRef.current = serialized;
+        setSaveStatus("saved");
+        setSaveError(null);
+      } else {
+        setSaveStatus("error");
+        setSaveError(result.error ?? "Save failed");
+      }
+    }, SAVE_DEBOUNCE_MS);
+
+    return () => {
+      if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
+    };
+  }, [tour, hydrated, canEdit, onSaveTour]);
 
   // Scene-tracking for the lead gate trigger.
   useEffect(() => {
@@ -208,7 +282,7 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
 
   const handlePlaceHotspot = useCallback(
     (yaw: number, pitch: number) => {
-      const id = `h_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`;
+      const id = newId();
       const firstOther = tour.scenes.find((s) => s.id !== currentSceneId);
       const payload: HotspotPayload = {
         type: "scene_link",
@@ -406,7 +480,7 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
           const newHotspots: Hotspot[] = [];
           if (next) {
             newHotspots.push({
-              id: `h_auto_n_${s.id}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 4)}`,
+              id: newId(),
               yaw: s.initialYaw,
               pitch: -0.35, // ~20° below horizon — looks like a floor doorway
               label: next.name,
@@ -418,7 +492,7 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
           }
           if (mode === "next-and-prev" && previous) {
             newHotspots.push({
-              id: `h_auto_p_${s.id}_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 4)}`,
+              id: newId(),
               yaw: s.initialYaw + Math.PI, // opposite direction
               pitch: -0.35,
               label: previous.name,
@@ -628,7 +702,7 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
       if (!clipboardHotspot) return;
       const makePasted = () => ({
         ...clipboardHotspot.hotspot,
-        id: `h_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+        id: newId(),
       });
       commitTour((prev) => {
         if (toAllScenes) {
@@ -731,36 +805,57 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
     [commitTour],
   );
 
-  const handleReset = useCallback(() => {
-    if (!confirm("Discard all hotspots, branding, and renames for this tour? This can't be undone.")) return;
-    clearTourOverrides(tour.slug);
+  const handleReset = useCallback(async () => {
+    if (
+      !confirm(
+        "Discard all hotspots, branding, and renames for this tour? This can't be undone.",
+      )
+    )
+      return;
+    if (onResetTour) {
+      await onResetTour();
+    }
     commitTour(baseTour);
     setCurrentSceneId(baseTour.coverSceneId);
     setSelectedHotspotId(null);
-  }, [baseTour, tour.slug, commitTour]);
+  }, [baseTour, commitTour, onResetTour]);
 
   const handleGateSubmit = useCallback(
     (data: { email: string; name?: string; phone?: string; preferredTime?: string }) => {
-      const lead = {
-        id: `lead_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 6)}`,
+      const source: Lead["source"] =
+        tour.leadGate?.mode === "schedule" ? "schedule" : "gate";
+      const scenesViewed = scenesViewedRef.current.size;
+      const durationMs = Date.now() - sessionStartRef.current;
+      // Local "happy path" UX — close the gate immediately. Network errors
+      // surface in the LeadGateModal toast on next open if the submission
+      // failed; webhook fire-and-forget continues regardless.
+      void onSubmitLead?.({
+        email: data.email,
+        name: data.name,
+        phone: data.phone,
+        preferredTime: data.preferredTime,
+        source,
+        scenesViewed,
+        durationMs,
+      });
+      fireLeadWebhook(tour.webhookUrl, {
+        id: newId(),
         tourSlug: tour.slug,
         email: data.email,
         name: data.name,
         phone: data.phone,
         preferredTime: data.preferredTime,
-        source: tour.leadGate?.mode === "schedule" ? ("schedule" as const) : ("gate" as const),
+        source,
         capturedAt: new Date().toISOString(),
-        scenesViewed: scenesViewedRef.current.size,
-        durationMs: Date.now() - sessionStartRef.current,
-      };
-      appendLead(lead);
-      fireLeadWebhook(tour.webhookUrl, lead);
+        scenesViewed,
+        durationMs,
+      });
       markGatePassed(tour.slug);
       setGatePassed(true);
       setGateOpen(false);
       setContactGateOpen(false);
     },
-    [tour.slug, tour.leadGate?.mode, tour.webhookUrl],
+    [tour.slug, tour.leadGate?.mode, tour.webhookUrl, onSubmitLead],
   );
 
   const handleContactClick = useCallback(() => {
@@ -958,20 +1053,30 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
             }}
             branding={isNoBrandMode ? undefined : tour.branding}
             onSubmit={(d) => {
-              const lead = {
-                id: `lead_${Date.now().toString(36)}`,
+              const source = contactSourceRef.current;
+              const scenesViewed = scenesViewedRef.current.size;
+              const durationMs = Date.now() - sessionStartRef.current;
+              void onSubmitLead?.({
+                email: d.email,
+                name: d.name,
+                phone: d.phone,
+                preferredTime: d.preferredTime,
+                source,
+                scenesViewed,
+                durationMs,
+              });
+              fireLeadWebhook(tour.webhookUrl, {
+                id: newId(),
                 tourSlug: tour.slug,
                 email: d.email,
                 name: d.name,
                 phone: d.phone,
                 preferredTime: d.preferredTime,
-                source: contactSourceRef.current,
+                source,
                 capturedAt: new Date().toISOString(),
-                scenesViewed: scenesViewedRef.current.size,
-                durationMs: Date.now() - sessionStartRef.current,
-              };
-              appendLead(lead);
-              fireLeadWebhook(tour.webhookUrl, lead);
+                scenesViewed,
+                durationMs,
+              });
               setContactGateOpen(false);
             }}
             onSkip={() => setContactGateOpen(false)}
@@ -1158,20 +1263,42 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
               Help
             </ToolbarButton>
 
-            <button
-              type="button"
-              onClick={() => {
-                setEditMode((v) => !v);
-                setSelectedHotspotId(null);
-              }}
-              className={`ml-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
-                editMode
-                  ? "bg-amber-400 text-neutral-900 hover:bg-amber-300"
-                  : "bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
-              }`}
-            >
-              {editMode ? "Editing" : "View mode"}
-            </button>
+            {canEdit ? (
+              <span
+                className={`mr-1 hidden text-xs sm:inline ${
+                  saveStatus === "error"
+                    ? "text-red-600"
+                    : saveStatus === "saving"
+                      ? "text-neutral-500"
+                      : "text-neutral-400"
+                }`}
+                title={saveError ?? undefined}
+              >
+                {saveStatus === "saving"
+                  ? "Saving…"
+                  : saveStatus === "saved"
+                    ? "Saved"
+                    : saveStatus === "error"
+                      ? "Save failed"
+                      : ""}
+              </span>
+            ) : null}
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setEditMode((v) => !v);
+                  setSelectedHotspotId(null);
+                }}
+                className={`ml-1 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+                  editMode
+                    ? "bg-amber-400 text-neutral-900 hover:bg-amber-300"
+                    : "bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
+                }`}
+              >
+                {editMode ? "Editing" : "View mode"}
+              </button>
+            ) : null}
 
             <div className="hidden md:flex items-center gap-1 border-l border-neutral-200 dark:border-neutral-800 pl-2 ml-1">
               <ToolbarButton onClick={handleExport} title="Download tour config as JSON">
@@ -1317,7 +1444,11 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
       ) : null}
 
       {leadsOpen ? (
-        <LeadsModal tourSlug={tour.slug} onClose={() => setLeadsOpen(false)} />
+        <LeadsModal
+          tourSlug={tour.slug}
+          loadLeads={onLoadLeads}
+          onClose={() => setLeadsOpen(false)}
+        />
       ) : null}
 
       {highlightsOpen ? (

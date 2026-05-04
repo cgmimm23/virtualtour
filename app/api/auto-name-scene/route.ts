@@ -46,14 +46,40 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  // Resolve relative paths (e.g. "/tours/kremmen-place/scene-01.jpg") to absolute URLs
-  // so Claude can fetch them. Use the request's host so this works in dev + DO + custom domain.
+  // Resolve relative paths to absolute URLs and fetch the image server-side.
+  // Anthropic's URL-source image fetcher has trouble with some hosts/sizes,
+  // so we download here and send as base64 — same cost, more reliable.
   let absoluteUrl: string;
   if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
     absoluteUrl = imageUrl;
   } else {
     const origin = new URL(req.url).origin;
     absoluteUrl = `${origin}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
+  }
+
+  let imageBase64: string;
+  let mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
+  try {
+    const imgRes = await fetch(absoluteUrl);
+    if (!imgRes.ok) {
+      return NextResponse.json(
+        { error: `failed to fetch image (${imgRes.status} from ${absoluteUrl})` },
+        { status: 400 },
+      );
+    }
+    const ct = (imgRes.headers.get("content-type") ?? "").toLowerCase();
+    mediaType = ct.includes("png")
+      ? "image/png"
+      : ct.includes("webp")
+        ? "image/webp"
+        : ct.includes("gif")
+          ? "image/gif"
+          : "image/jpeg";
+    const buf = Buffer.from(await imgRes.arrayBuffer());
+    imageBase64 = buf.toString("base64");
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown error";
+    return NextResponse.json({ error: `image fetch failed: ${msg}` }, { status: 400 });
   }
 
   try {
@@ -72,7 +98,10 @@ export async function POST(req: Request) {
         {
           role: "user",
           content: [
-            { type: "image", source: { type: "url", url: absoluteUrl } },
+            {
+              type: "image",
+              source: { type: "base64", media_type: mediaType, data: imageBase64 },
+            },
             { type: "text", text: "What room or area is this?" },
           ],
         },

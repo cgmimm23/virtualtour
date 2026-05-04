@@ -43,7 +43,8 @@
       "Bash(python -c \"import json,sys; d=json.load\\(sys.stdin\\); print\\(json.dumps\\(d[0].get\\('domains'\\), indent=2\\)\\)\")",
       "Bash(python -c ' *)",
       "Skill(claude-api)",
-      "Bash(git commit -m 'feat: AI auto-name rooms via Claude vision + neutral marketing copy *)"
+      "Bash(git commit -m 'feat: AI auto-name rooms via Claude vision + neutral marketing copy *)",
+      "Bash(git commit -m 'fix: AI auto-name uses base64 \\(Anthropic URL fetcher rejected our host\\) + force light mode site-wide *)"
     ]
   }
 }

@@ -2,19 +2,45 @@
 
 import { useEffect, useState } from "react";
 import type { Lead } from "@/lib/tour/types";
-import { clearLeads, leadScore, leadScoreLabel, leadsToCsv, loadLeads } from "@/lib/tour/leads";
+import { leadScore, leadScoreLabel, leadsToCsv } from "@/lib/tour/leads";
 
 interface LeadsModalProps {
   tourSlug: string;
+  /**
+   * Async loader for leads. When omitted (e.g. legacy single-tenant context),
+   * the modal renders an empty state — leads now live in the database, so
+   * the editor must wire this prop or there's nothing to show.
+   */
+  loadLeads?: () => Promise<Lead[]>;
   onClose: () => void;
 }
 
-export function LeadsModal({ tourSlug, onClose }: LeadsModalProps) {
+export function LeadsModal({ tourSlug, loadLeads, onClose }: LeadsModalProps) {
   const [leads, setLeads] = useState<Lead[]>([]);
+  const [status, setStatus] = useState<"loading" | "ready" | "error">(
+    loadLeads ? "loading" : "ready",
+  );
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLeads(loadLeads(tourSlug));
-  }, [tourSlug]);
+    if (!loadLeads) return;
+    let cancelled = false;
+    setStatus("loading");
+    loadLeads()
+      .then((rows) => {
+        if (cancelled) return;
+        setLeads(rows);
+        setStatus("ready");
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return;
+        setError(err instanceof Error ? err.message : "Failed to load leads");
+        setStatus("error");
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [loadLeads, tourSlug]);
 
   const handleExport = () => {
     const csv = leadsToCsv(leads);
@@ -27,12 +53,6 @@ export function LeadsModal({ tourSlug, onClose }: LeadsModalProps) {
     URL.revokeObjectURL(url);
   };
 
-  const handleClear = () => {
-    if (!confirm(`Delete all ${leads.length} leads for this tour? This can't be undone.`)) return;
-    clearLeads(tourSlug);
-    setLeads([]);
-  };
-
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4" onClick={onClose}>
       <div
@@ -43,7 +63,9 @@ export function LeadsModal({ tourSlug, onClose }: LeadsModalProps) {
           <div>
             <h3 className="text-base font-semibold">Leads</h3>
             <p className="text-xs text-neutral-500">
-              {leads.length} captured · stored locally in this browser
+              {status === "loading"
+                ? "Loading…"
+                : `${leads.length} captured`}
             </p>
           </div>
           <div className="flex items-center gap-2">
@@ -54,14 +76,6 @@ export function LeadsModal({ tourSlug, onClose }: LeadsModalProps) {
               className="rounded-md border border-neutral-300 dark:border-neutral-700 px-3 py-1.5 text-sm font-medium hover:bg-neutral-100 dark:hover:bg-neutral-800 disabled:opacity-50"
             >
               Download CSV
-            </button>
-            <button
-              type="button"
-              onClick={handleClear}
-              disabled={leads.length === 0}
-              className="rounded-md px-3 py-1.5 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-950/30 disabled:opacity-50"
-            >
-              Clear
             </button>
             <button
               type="button"
@@ -77,9 +91,15 @@ export function LeadsModal({ tourSlug, onClose }: LeadsModalProps) {
           </div>
         </div>
         <div className="flex-1 overflow-y-auto">
-          {leads.length === 0 ? (
+          {status === "error" ? (
+            <div className="px-5 py-12 text-center text-sm text-red-600">
+              {error}
+            </div>
+          ) : status === "loading" ? (
+            <div className="px-5 py-12 text-center text-sm text-neutral-500">Loading leads…</div>
+          ) : leads.length === 0 ? (
             <div className="px-5 py-12 text-center text-sm text-neutral-500">
-              No leads yet. Open the tour in share mode (top-right link) and submit the email gate to test.
+              No leads yet. Open the public tour link and submit the email gate to test.
             </div>
           ) : (
             <table className="w-full text-sm">
