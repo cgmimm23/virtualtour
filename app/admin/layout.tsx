@@ -11,6 +11,7 @@ const NAV: Array<{ href: string; label: string }> = [
   { href: "/admin/users", label: "Users" },
   { href: "/admin/teams", label: "Teams" },
   { href: "/admin/billing", label: "Billing" },
+  { href: "/admin/pricing", label: "Pricing" },
   { href: "/admin/tours", label: "Tours" },
   { href: "/admin/leads", label: "Leads" },
   { href: "/admin/settings", label: "Settings" },

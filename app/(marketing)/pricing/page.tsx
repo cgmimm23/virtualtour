@@ -1,67 +1,8 @@
 import Link from "next/link";
+import { getPricingTiers } from "@/lib/pricing";
 
-const TIERS = [
-  {
-    name: "Solo",
-    price: 29,
-    blurb: "For the solo agent shipping a few tours a month.",
-    cta: "Start free trial",
-    highlight: false,
-    features: [
-      { label: "5 active tours", included: true },
-      { label: "1 user", included: true },
-      { label: "25 GB storage", included: true },
-      { label: "Unlimited tour views", included: true },
-      { label: "Email lead capture", included: true },
-      { label: "CSV export", included: true },
-      { label: "Zapier integration", included: true },
-      { label: "Native CRM (FUB, kvCORE, Sierra)", included: false },
-      { label: "White-label / custom domain", included: false },
-      { label: "API access", included: false },
-    ],
-  },
-  {
-    name: "Team",
-    price: 79,
-    blurb: "For small teams that pipe leads to a CRM.",
-    cta: "Start free trial",
-    highlight: true,
-    features: [
-      { label: "25 active tours", included: true },
-      { label: "5 users", included: true },
-      { label: "100 GB storage", included: true },
-      { label: "Unlimited tour views", included: true },
-      { label: "Email lead capture", included: true },
-      { label: "CSV export", included: true },
-      { label: "Zapier integration", included: true },
-      { label: "Native CRM (FUB, kvCORE, Sierra)", included: true },
-      { label: "Custom branding + colors", included: true },
-      { label: "White-label / custom domain", included: false },
-      { label: "API access", included: false },
-    ],
-  },
-  {
-    name: "Brokerage",
-    price: 199,
-    blurb: "For brokerages with custom domains and integrations.",
-    cta: "Contact sales",
-    highlight: false,
-    features: [
-      { label: "Unlimited active tours", included: true },
-      { label: "20 users", included: true },
-      { label: "500 GB storage", included: true },
-      { label: "Unlimited tour views", included: true },
-      { label: "Email lead capture", included: true },
-      { label: "CSV export", included: true },
-      { label: "Zapier integration", included: true },
-      { label: "Native CRM (FUB, kvCORE, Sierra)", included: true },
-      { label: "Custom branding + colors", included: true },
-      { label: 'Remove "Powered by Tourly"', included: true },
-      { label: "Custom domain (CNAME)", included: true },
-      { label: "API access", included: true },
-    ],
-  },
-];
+export const dynamic = "force-dynamic";
+
 
 const FAQS = [
   {
@@ -90,7 +31,15 @@ const FAQS = [
   },
 ];
 
-export default function PricingPage() {
+export default async function PricingPage() {
+  const TIERS = (await getPricingTiers()).map((t) => ({
+    name: t.displayName,
+    price: t.priceCents / 100,
+    blurb: t.blurb,
+    cta: t.ctaLabel,
+    highlight: t.highlight,
+    features: t.features,
+  }));
   return (
     <>
       <section className="border-b border-neutral-200 dark:border-neutral-800 py-16 md:py-20">

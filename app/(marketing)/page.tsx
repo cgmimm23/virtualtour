@@ -1,6 +1,10 @@
 import Link from "next/link";
+import { getPricingTiers } from "@/lib/pricing";
 
-export default function LandingPage() {
+export const dynamic = "force-dynamic";
+
+export default async function LandingPage() {
+  const tiers = await getPricingTiers();
   return (
     <>
       <Hero />
@@ -8,7 +12,7 @@ export default function LandingPage() {
       <Features />
       <HowItWorks />
       <DemoBlock />
-      <PricingTeaser />
+      <PricingTeaser tiers={tiers} />
       <FinalCta />
     </>
   );
@@ -234,7 +238,7 @@ function DemoBlock() {
   );
 }
 
-function PricingTeaser() {
+function PricingTeaser({ tiers }: { tiers: Awaited<ReturnType<typeof getPricingTiers>> }) {
   return (
     <section className="border-y border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 py-20">
       <div className="mx-auto max-w-6xl px-6">
@@ -251,9 +255,15 @@ function PricingTeaser() {
           </p>
         </div>
         <div className="mt-10 grid gap-4 md:grid-cols-3">
-          <PriceCard tier="Solo" price={29} highlight={false} blurb="For the solo agent shipping 5 tours/mo." />
-          <PriceCard tier="Team" price={79} highlight blurb="For small teams (5 users) and CRM piping." />
-          <PriceCard tier="Brokerage" price={199} highlight={false} blurb="White-label, custom domain, API access." />
+          {tiers.map((t) => (
+            <PriceCard
+              key={t.plan}
+              tier={t.displayName}
+              price={Math.round(t.priceCents / 100)}
+              highlight={t.highlight}
+              blurb={t.blurb}
+            />
+          ))}
         </div>
         <div className="mt-8 text-center">
           <Link href="/pricing" className="text-sm font-semibold text-brand-600 hover:text-brand-700">

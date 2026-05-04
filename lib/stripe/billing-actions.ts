@@ -85,6 +85,171 @@ export async function provisionStripeProducts() {
   }
 }
 
+// ─────────────────────────────────────────────────────────────
+// Admin: edit pricing tiers + sync to Stripe
+// ─────────────────────────────────────────────────────────────
+
+const SavePricingSchema = z.object({
+  plan: z.enum(["solo", "team", "brokerage"]),
+  displayName: z.string().min(1).max(64),
+  priceCents: z.number().int().min(0).max(10_000_00), // $10k cap sanity
+  blurb: z.string().max(280),
+  ctaLabel: z.string().max(64),
+  highlight: z.boolean(),
+  active: z.boolean(),
+  features: z
+    .array(
+      z.object({
+        label: z.string().min(1).max(120),
+        included: z.boolean(),
+      }),
+    )
+    .max(20),
+});
+
+export async function savePricingTier(input: {
+  plan: string;
+  displayName: string;
+  priceCents: number;
+  blurb: string;
+  ctaLabel: string;
+  highlight: boolean;
+  active: boolean;
+  features: Array<{ label: string; included: boolean }>;
+}) {
+  await requirePlatformAdmin("/admin/pricing");
+  const parsed = SavePricingSchema.safeParse(input);
+  if (!parsed.success) {
+    return { ok: false as const, error: parsed.error.issues[0]?.message ?? "invalid input" };
+  }
+  const supabase = createAdminClient();
+  const { error } = await supabase
+    .from("pricing_tiers")
+    .update({
+      display_name: parsed.data.displayName,
+      price_cents: parsed.data.priceCents,
+      blurb: parsed.data.blurb,
+      cta_label: parsed.data.ctaLabel,
+      highlight: parsed.data.highlight,
+      active: parsed.data.active,
+      features: parsed.data.features,
+    })
+    .eq("plan", parsed.data.plan);
+  if (error) return { ok: false as const, error: error.message };
+  revalidatePath("/admin/pricing");
+  revalidatePath("/pricing");
+  revalidatePath("/dashboard/billing");
+  revalidatePath("/admin/billing");
+  return { ok: true as const };
+}
+
+export async function syncTierToStripe(input: { plan: string }) {
+  await requirePlatformAdmin("/admin/pricing");
+  if (!["solo", "team", "brokerage"].includes(input.plan)) {
+    return { ok: false as const, error: "invalid plan" };
+  }
+  const stripe = await getStripe();
+  if (!stripe) {
+    return { ok: false as const, error: "Stripe not configured" };
+  }
+  const supabase = createAdminClient();
+  const planValue = input.plan as "solo" | "team" | "brokerage";
+  const { data: tier } = await supabase
+    .from("pricing_tiers")
+    .select("*")
+    .eq("plan", planValue)
+    .maybeSingle();
+  if (!tier) return { ok: false as const, error: "tier not found" };
+
+  // Locate or create the product (one product per plan, matched by metadata).
+  const products = await stripe.products.list({ active: true, limit: 100 });
+  const metadataKey = `tourly_${tier.plan}`;
+  let product = products.data.find((p) => p.metadata?.tourly_tier === metadataKey);
+  if (!product) {
+    product = await stripe.products.create({
+      name: `Tourly ${tier.display_name}`,
+      description: tier.blurb,
+      metadata: { tourly_tier: metadataKey },
+    });
+  } else if (
+    product.name !== `Tourly ${tier.display_name}` ||
+    product.description !== tier.blurb
+  ) {
+    product = await stripe.products.update(product.id, {
+      name: `Tourly ${tier.display_name}`,
+      description: tier.blurb || undefined,
+    });
+  }
+
+  // Compare current Stripe price's amount to the tier's amount. If
+  // different, archive the old price and create a new one. Existing
+  // subscriptions on the old price keep their billing — Stripe won't
+  // force-migrate them, which is the safe default.
+  let priceId = tier.stripe_price_id;
+  let createdNew = false;
+  if (priceId) {
+    const existing = await stripe.prices.retrieve(priceId).catch(() => null);
+    if (
+      !existing ||
+      existing.unit_amount !== tier.price_cents ||
+      existing.currency !== tier.currency ||
+      existing.recurring?.interval !== "month"
+    ) {
+      // Need a new price.
+      if (existing && existing.active) {
+        await stripe.prices.update(existing.id, { active: false });
+      }
+      const fresh = await stripe.prices.create({
+        product: product.id,
+        unit_amount: tier.price_cents,
+        currency: tier.currency,
+        recurring: { interval: "month" },
+        metadata: { tourly_tier: metadataKey },
+      });
+      priceId = fresh.id;
+      createdNew = true;
+    }
+  } else {
+    // Never synced before. Create.
+    const fresh = await stripe.prices.create({
+      product: product.id,
+      unit_amount: tier.price_cents,
+      currency: tier.currency,
+      recurring: { interval: "month" },
+      metadata: { tourly_tier: metadataKey },
+    });
+    priceId = fresh.id;
+    createdNew = true;
+  }
+
+  // Persist the linkage.
+  await supabase
+    .from("pricing_tiers")
+    .update({ stripe_product_id: product.id, stripe_price_id: priceId })
+    .eq("plan", tier.plan);
+
+  // Mirror into app_secrets so checkout's getSecret('STRIPE_PRICE_ID_*') still works.
+  const secretKey =
+    tier.plan === "solo"
+      ? "STRIPE_PRICE_ID_SOLO"
+      : tier.plan === "team"
+        ? "STRIPE_PRICE_ID_TEAM"
+        : "STRIPE_PRICE_ID_BROKERAGE";
+  await supabase.from("app_secrets").upsert(
+    { key: secretKey, value: priceId, description: `${tier.display_name} monthly price ID` },
+    { onConflict: "key" },
+  );
+  invalidateSecret(secretKey as Parameters<typeof invalidateSecret>[0]);
+
+  revalidatePath("/admin/pricing");
+  return {
+    ok: true as const,
+    productId: product.id,
+    priceId,
+    createdNew,
+  };
+}
+
 export async function provisionStripeWebhook() {
   await requirePlatformAdmin("/admin/settings");
   const stripe = await getStripe();

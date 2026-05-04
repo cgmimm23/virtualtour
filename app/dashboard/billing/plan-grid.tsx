@@ -2,42 +2,24 @@
 
 import { useTransition } from "react";
 import { startCheckout, openCustomerPortal } from "@/lib/stripe/billing-actions";
-
-const PLANS: Array<{
-  value: "solo" | "team" | "brokerage";
-  label: string;
-  price: string;
-  bullets: string[];
-  highlight?: boolean;
-}> = [
-  {
-    value: "solo",
-    label: "Solo",
-    price: "$29",
-    bullets: ["5 active tours", "1 user", "Lead capture", "Zapier"],
-  },
-  {
-    value: "team",
-    label: "Team",
-    price: "$79",
-    bullets: ["25 active tours", "5 users", "Native CRM"],
-    highlight: true,
-  },
-  {
-    value: "brokerage",
-    label: "Brokerage",
-    price: "$199",
-    bullets: ["Unlimited", "20 users", "White-label", "API"],
-  },
-];
+import type { PricingTier } from "@/lib/pricing";
 
 export function BillingPlanGrid({
   currentPlan,
   hasCustomer,
+  tiers,
 }: {
   currentPlan: string;
   hasCustomer: boolean;
+  tiers: PricingTier[];
 }) {
+  const PLANS = tiers.map((t) => ({
+    value: t.plan,
+    label: t.displayName,
+    price: `$${Math.round(t.priceCents / 100)}`,
+    bullets: t.features.filter((f) => f.included).slice(0, 4).map((f) => f.label),
+    highlight: t.highlight,
+  }));
   const [pending, startTransition] = useTransition();
 
   const onUpgrade = (plan: "solo" | "team" | "brokerage") => {

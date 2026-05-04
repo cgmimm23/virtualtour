@@ -88,6 +88,42 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["billing_events"]["Insert"]>;
         Relationships: [];
       };
+      pricing_tiers: {
+        Row: {
+          plan: Plan;
+          display_name: string;
+          price_cents: number;
+          currency: string;
+          blurb: string;
+          features: Array<{ label: string; included: boolean }>;
+          cta_label: string;
+          highlight: boolean;
+          active: boolean;
+          sort_order: number;
+          stripe_product_id: string | null;
+          stripe_price_id: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          plan: Plan;
+          display_name: string;
+          price_cents: number;
+          currency?: string;
+          blurb?: string;
+          features?: Array<{ label: string; included: boolean }>;
+          cta_label?: string;
+          highlight?: boolean;
+          active?: boolean;
+          sort_order?: number;
+          stripe_product_id?: string | null;
+          stripe_price_id?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["pricing_tiers"]["Insert"]>;
+        Relationships: [];
+      };
       app_secrets: {
         Row: {
           key: string;

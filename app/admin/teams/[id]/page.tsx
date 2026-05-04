@@ -2,6 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePlatformAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getPricingTiers } from "@/lib/pricing";
 import { TeamPlanControls } from "./controls";
 
 export const dynamic = "force-dynamic";
@@ -9,13 +10,6 @@ export const dynamic = "force-dynamic";
 interface PageProps {
   params: Promise<{ id: string }>;
 }
-
-const PLAN_MRR: Record<string, number> = {
-  trial: 0,
-  solo: 2900,
-  team: 7900,
-  brokerage: 19900,
-};
 
 function fmtMoney(cents: number, currency = "usd"): string {
   return new Intl.NumberFormat("en-US", {
@@ -58,7 +52,10 @@ export default async function TeamDetail({ params }: PageProps) {
     if (u?.user?.email) memberEmails[m.user_id] = u.user.email;
   }
 
-  const mrrCents = team.stripe_status === "active" ? PLAN_MRR[team.plan] ?? 0 : 0;
+  const tiers = await getPricingTiers();
+  const planMrr: Record<string, number> = { trial: 0 };
+  for (const t of tiers) planMrr[t.plan] = t.priceCents;
+  const mrrCents = team.stripe_status === "active" ? planMrr[team.plan] ?? 0 : 0;
 
   return (
     <div className="mx-auto max-w-5xl px-6 py-8">

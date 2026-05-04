@@ -2,25 +2,10 @@ import Link from "next/link";
 import { requireActiveTeam } from "@/lib/auth";
 import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getPricingTiers, getPricingTierByPlan } from "@/lib/pricing";
 import { BillingPlanGrid } from "./plan-grid";
 
 export const dynamic = "force-dynamic";
-
-const PLAN_BLURB: Record<string, { price: string; bullets: string[] }> = {
-  trial: { price: "free", bullets: ["1 tour", "Tourly footer", "lead capture disabled"] },
-  solo: {
-    price: "$29 / mo",
-    bullets: ["5 active tours", "1 user", "lead capture", "CSV export", "Zapier"],
-  },
-  team: {
-    price: "$79 / mo",
-    bullets: ["25 active tours", "5 users", "native CRM (FUB, kvCORE, Sierra)"],
-  },
-  brokerage: {
-    price: "$199 / mo",
-    bullets: ["unlimited tours", "20 users", "white-label", "custom domain", "API"],
-  },
-};
 
 export default async function DashboardBilling({
   searchParams,
@@ -41,7 +26,16 @@ export default async function DashboardBilling({
     .order("created_at", { ascending: false })
     .limit(10);
 
-  const blurb = PLAN_BLURB[team.plan] ?? PLAN_BLURB.trial;
+  const tiers = await getPricingTiers();
+  const currentTier = await getPricingTierByPlan(team.plan);
+  const blurb = currentTier
+    ? {
+        price: `$${(currentTier.priceCents / 100).toFixed(0)} / mo`,
+        bullets: currentTier.features.filter((f) => f.included).map((f) => f.label),
+      }
+    : team.plan === "trial"
+      ? { price: "free", bullets: ["1 tour", "Tourly footer", "lead capture disabled"] }
+      : { price: "—", bullets: [] };
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -108,6 +102,7 @@ export default async function DashboardBilling({
               <BillingPlanGrid
                 currentPlan={team.plan}
                 hasCustomer={Boolean(team.stripe_customer_id)}
+                tiers={tiers}
               />
             )}
           </div>

@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { getPricingTiers } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -18,12 +19,12 @@ interface BillingRow {
   mrrCents: number;
 }
 
-const PLAN_MRR: Record<string, number> = {
-  trial: 0,
-  solo: 2900,
-  team: 7900,
-  brokerage: 19900,
-};
+async function loadPlanMrr(): Promise<Record<string, number>> {
+  const tiers = await getPricingTiers();
+  const map: Record<string, number> = { trial: 0 };
+  for (const t of tiers) map[t.plan] = t.priceCents;
+  return map;
+}
 
 function fmtMoney(cents: number): string {
   return `$${(cents / 100).toFixed(2)}`;
@@ -54,6 +55,7 @@ function statusBadge(s: string | null) {
 
 async function loadRows(): Promise<{ rows: BillingRow[]; mrrCents: number }> {
   const supabase = createAdminClient();
+  const PLAN_MRR = await loadPlanMrr();
   const { data: teams } = await supabase
     .from("teams")
     .select(
