@@ -26,11 +26,12 @@ function Hero() {
             Built for solo agents and small teams
           </span>
           <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-6xl">
-            Matterport tours <span className="bg-gradient-to-r from-amber-500 to-rose-500 bg-clip-text text-transparent">without the Matterport tax</span>
+            The <span className="bg-gradient-to-r from-amber-500 to-rose-500 bg-clip-text text-transparent">AI virtual tour creator</span> built for real estate
           </h1>
           <p className="mt-5 text-lg text-neutral-600 dark:text-neutral-400 md:text-xl">
-            Upload 360 photos from any camera. Get a branded, lead-capturing virtual tour
-            in under 10 minutes. Pipe every email straight into your CRM.
+            Upload 360 photos from any camera. AI auto-names every room and links the
+            doorways. Branded, lead-capturing tours ready in minutes — every email pipes
+            straight into your CRM.
           </p>
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
@@ -289,7 +290,7 @@ function FinalCta() {
     <section className="py-24">
       <div className="mx-auto max-w-3xl px-6 text-center">
         <h2 className="text-3xl font-semibold tracking-tight md:text-4xl">
-          Stop paying Matterport for hardware you don't need.
+          AI-powered tours, ready in minutes.
         </h2>
         <p className="mt-3 text-neutral-600 dark:text-neutral-400">
           Tourly works with the camera in your kit bag. Captures leads. Costs less than one

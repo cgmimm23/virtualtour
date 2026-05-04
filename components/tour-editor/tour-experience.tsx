@@ -327,6 +327,63 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
     setApplyViewVersion((v) => v + 1);
   }, []);
 
+  // AI auto-name: Claude vision labels each scene by looking at the panorama.
+  // Skips scenes the user has already manually renamed (anything not "Scene NN").
+  const [aiNamingState, setAiNamingState] = useState<{
+    running: boolean;
+    done: number;
+    total: number;
+    error: string | null;
+  }>({ running: false, done: 0, total: 0, error: null });
+
+  const handleAiAutoName = useCallback(async () => {
+    const defaultPattern = /^Scene \d{2}$/;
+    const targets = tour.scenes.filter((s) => defaultPattern.test(s.name));
+    if (targets.length === 0) {
+      alert(
+        "Every scene already has a custom name. Reset to defaults first if you want AI to re-name them.",
+      );
+      return;
+    }
+    if (
+      !confirm(
+        `Use AI to name ${targets.length} scene${targets.length === 1 ? "" : "s"}? Sends each panorama to Claude vision; existing custom names are kept. Cost: roughly $${(targets.length * 0.05).toFixed(2)}.`,
+      )
+    ) {
+      return;
+    }
+
+    setAiNamingState({ running: true, done: 0, total: targets.length, error: null });
+
+    for (let i = 0; i < targets.length; i++) {
+      const scene = targets[i];
+      try {
+        const res = await fetch("/api/auto-name-scene", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ imageUrl: scene.imageUrl }),
+        });
+        const data = (await res.json()) as { name?: string; error?: string };
+        if (!res.ok || !data.name) {
+          throw new Error(data.error ?? `request failed (${res.status})`);
+        }
+        updateScene(scene.id, (s) =>
+          // Only commit if the user hasn't manually changed it during the run.
+          defaultPattern.test(s.name) ? { ...s, name: data.name! } : s,
+        );
+        setAiNamingState((p) => ({ ...p, done: i + 1 }));
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "unknown error";
+        setAiNamingState({ running: false, done: i, total: targets.length, error: msg });
+        alert(
+          `AI naming failed at scene ${i + 1} of ${targets.length}: ${msg}\n\nIf this is the first run on production, make sure ANTHROPIC_API_KEY is set in your Digital Ocean app's environment variables, then redeploy.`,
+        );
+        return;
+      }
+    }
+    setAiNamingState({ running: false, done: targets.length, total: targets.length, error: null });
+  }, [tour.scenes, updateScene]);
+
   const handleAutoDoorways = useCallback(
     (mode: "next-only" | "next-and-prev") => {
       if (tour.scenes.length < 2) return;
@@ -1023,6 +1080,15 @@ export function TourExperience({ baseTour }: TourExperienceProps) {
                   </svg>
                 </ToolbarButton>
                 <span className="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
+                <ToolbarButton
+                  onClick={handleAiAutoName}
+                  disabled={aiNamingState.running}
+                  title="Use Claude vision to label each scene with a room name"
+                >
+                  {aiNamingState.running
+                    ? `Naming ${aiNamingState.done}/${aiNamingState.total}…`
+                    : "✨ AI auto-name"}
+                </ToolbarButton>
                 <ToolbarButton
                   onClick={() => handleAutoDoorways("next-only")}
                   title="Add a 'next' doorway hotspot to every scene based on sidebar order"
