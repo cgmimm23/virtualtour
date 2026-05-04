@@ -111,7 +111,12 @@ export default async function AdminSettings() {
                 <h2 className="text-lg font-semibold">{group.title}</h2>
                 <p className="mt-1 max-w-2xl text-sm text-neutral-500">{group.blurb}</p>
               </div>
-              {group.title === "Stripe" ? <ProvisionButton /> : null}
+              {group.title === "Stripe" ? (
+                <div className="flex flex-col gap-1.5">
+                  <ProvisionButton />
+                  <ProvisionWebhookButton />
+                </div>
+              ) : null}
             </div>
             <div className="space-y-3">
               {group.keys.map((spec) => {
@@ -145,6 +150,19 @@ function ProvisionButton() {
         className="rounded-md border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
       >
         Create / sync Stripe products →
+      </button>
+    </form>
+  );
+}
+
+function ProvisionWebhookButton() {
+  return (
+    <form action="/admin/settings/provision-webhook" method="post">
+      <button
+        type="submit"
+        className="rounded-md border border-brand-300 bg-brand-50 px-3 py-1.5 text-xs font-semibold text-brand-700 hover:bg-brand-100"
+      >
+        Create webhook + secret →
       </button>
     </form>
   );

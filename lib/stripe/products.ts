@@ -7,6 +7,7 @@
 // the account, we reuse them instead of creating duplicates.
 
 import "server-only";
+import type Stripe from "stripe";
 import { requireStripe } from "./client";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -112,4 +113,106 @@ export async function bootstrapStripeProducts(): Promise<BootstrapResult> {
   }
 
   return result;
+}
+
+// ─────────────────────────────────────────────────────────────
+// Webhook provisioning — creates the webhook endpoint in Stripe and
+// stores the signing secret in app_secrets. Idempotent: if a webhook
+// already exists at the same URL, returns its existing secret if
+// available, otherwise rotates by deleting + recreating (Stripe only
+// reveals secrets at creation time).
+// ─────────────────────────────────────────────────────────────
+
+export interface WebhookBootstrapResult {
+  endpointId: string;
+  url: string;
+  rotated: boolean;
+  secretSaved: boolean;
+}
+
+const WEBHOOK_EVENTS: Stripe.WebhookEndpointCreateParams.EnabledEvent[] = [
+  "checkout.session.completed",
+  "customer.subscription.created",
+  "customer.subscription.updated",
+  "customer.subscription.deleted",
+  "invoice.paid",
+  "invoice.payment_failed",
+];
+
+export async function bootstrapStripeWebhook(
+  webhookUrl: string,
+): Promise<WebhookBootstrapResult> {
+  const stripe = await requireStripe();
+  const supabase = createAdminClient();
+
+  // Look for an existing webhook at the same URL.
+  const existing = await stripe.webhookEndpoints.list({ limit: 100 });
+  const match = existing.data.find((e) => e.url === webhookUrl);
+
+  let endpoint: Stripe.WebhookEndpoint;
+  let rotated = false;
+
+  if (match) {
+    // Stripe only reveals the signing secret on the create response. If we
+    // already have it stored in app_secrets, reuse the existing endpoint.
+    // Otherwise we have to delete + recreate to get a fresh secret we can
+    // capture.
+    const { data: existingSecret } = await supabase
+      .from("app_secrets")
+      .select("value")
+      .eq("key", "STRIPE_WEBHOOK_SECRET")
+      .maybeSingle();
+    const haveSecret = Boolean(existingSecret?.value);
+
+    if (haveSecret) {
+      // Update the existing endpoint's events to match what we want, in case
+      // the list drifted.
+      endpoint = await stripe.webhookEndpoints.update(match.id, {
+        enabled_events: WEBHOOK_EVENTS,
+        url: webhookUrl,
+      });
+      return {
+        endpointId: endpoint.id,
+        url: endpoint.url,
+        rotated: false,
+        secretSaved: true,
+      };
+    }
+
+    // No saved secret — rotate the endpoint to get a fresh one.
+    await stripe.webhookEndpoints.del(match.id);
+    rotated = true;
+  }
+
+  endpoint = await stripe.webhookEndpoints.create({
+    url: webhookUrl,
+    enabled_events: WEBHOOK_EVENTS,
+    description: "VITA app webhook (auto-provisioned)",
+    api_version: "2024-06-20",
+  });
+
+  if (!endpoint.secret) {
+    return {
+      endpointId: endpoint.id,
+      url: endpoint.url,
+      rotated,
+      secretSaved: false,
+    };
+  }
+
+  await supabase.from("app_secrets").upsert(
+    {
+      key: "STRIPE_WEBHOOK_SECRET",
+      value: endpoint.secret,
+      description: "Stripe webhook signing secret (auto-provisioned)",
+    },
+    { onConflict: "key" },
+  );
+
+  return {
+    endpointId: endpoint.id,
+    url: endpoint.url,
+    rotated,
+    secretSaved: true,
+  };
 }

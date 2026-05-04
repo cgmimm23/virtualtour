@@ -6,7 +6,7 @@ import { z } from "zod";
 import { requirePlatformAdmin, getUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "./client";
-import { bootstrapStripeProducts } from "./products";
+import { bootstrapStripeProducts, bootstrapStripeWebhook } from "./products";
 import { invalidateSecret } from "@/lib/secrets";
 import type { SecretKey } from "@/lib/secrets";
 
@@ -77,6 +77,29 @@ export async function provisionStripeProducts() {
   }
   try {
     const result = await bootstrapStripeProducts();
+    revalidatePath("/admin/settings");
+    return { ok: true as const, ...result };
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown error";
+    return { ok: false as const, error: msg };
+  }
+}
+
+export async function provisionStripeWebhook() {
+  await requirePlatformAdmin("/admin/settings");
+  const stripe = await getStripe();
+  if (!stripe) {
+    return {
+      ok: false as const,
+      error: "STRIPE_SECRET_KEY not set. Save it first.",
+    };
+  }
+  const appUrl =
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://virtualtour.cgmimm.com";
+  const webhookUrl = `${appUrl}/api/stripe/webhook`;
+  try {
+    const result = await bootstrapStripeWebhook(webhookUrl);
+    invalidateSecret("STRIPE_WEBHOOK_SECRET");
     revalidatePath("/admin/settings");
     return { ok: true as const, ...result };
   } catch (err) {
