@@ -1,6 +1,7 @@
 import Link from "next/link";
 import type { Metadata } from "next";
 import { Logo } from "@/components/brand/logo";
+import { MobileNav } from "@/components/marketing/mobile-nav";
 
 export const metadata: Metadata = {
   title: "VITA · Virtual Interactive Tour Application by CGMIMM",
@@ -45,16 +46,17 @@ function Header() {
         <div className="flex items-center gap-2">
           <Link
             href="/login"
-            className="hidden rounded-md px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 sm:inline"
+            className="hidden rounded-md px-3 py-1.5 text-sm font-medium text-neutral-700 hover:bg-neutral-100 md:inline"
           >
             Sign in
           </Link>
           <Link
             href="/signup"
-            className="rounded-md bg-neutral-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
+            className="hidden rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700 md:inline"
           >
             Get started →
           </Link>
+          <MobileNav />
         </div>
       </div>
     </header>
