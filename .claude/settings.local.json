@@ -47,7 +47,8 @@
       "Bash(git commit -m 'fix: AI auto-name uses base64 \\(Anthropic URL fetcher rejected our host\\) + force light mode site-wide *)",
       "WebFetch(domain:www.cgmimm.com)",
       "WebFetch(domain:seo.cgmimm.com)",
-      "Bash(git commit -m 'fix: middleware skip /api/, brand palette from cgmimm.com \\(Open Sans + navy + crimson\\) *)"
+      "Bash(git commit -m 'fix: middleware skip /api/, brand palette from cgmimm.com \\(Open Sans + navy + crimson\\) *)",
+      "Bash(git commit -m 'fix: AI auto-name reads scene images from disk instead of self-fetch *)"
     ]
   }
 }

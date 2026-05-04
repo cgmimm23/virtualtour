@@ -1,5 +1,7 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
+import { readFile } from "node:fs/promises";
+import path from "node:path";
 
 /**
  * POST /api/auto-name-scene
@@ -46,40 +48,60 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "invalid JSON body" }, { status: 400 });
   }
 
-  // Resolve relative paths to absolute URLs and fetch the image server-side.
-  // Anthropic's URL-source image fetcher has trouble with some hosts/sizes,
-  // so we download here and send as base64 — same cost, more reliable.
-  let absoluteUrl: string;
-  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
-    absoluteUrl = imageUrl;
-  } else {
-    const origin = new URL(req.url).origin;
-    absoluteUrl = `${origin}${imageUrl.startsWith("/") ? "" : "/"}${imageUrl}`;
-  }
-
+  // Two image-source paths:
+  //   - Relative path like "/tours/kremmen-place/scene-01.jpg" → read from disk
+  //     under public/. Server self-fetch over HTTP deadlocks on DO App Platform.
+  //   - Absolute http(s) URL → fetch (e.g. once R2 lands in M3, the imageUrl
+  //     coming from the DB will be a public R2 URL).
   let imageBase64: string;
   let mediaType: "image/jpeg" | "image/png" | "image/webp" | "image/gif";
-  try {
-    const imgRes = await fetch(absoluteUrl);
-    if (!imgRes.ok) {
+
+  const pickMediaType = (
+    hint: string,
+  ): "image/jpeg" | "image/png" | "image/webp" | "image/gif" => {
+    const h = hint.toLowerCase();
+    if (h.includes("png")) return "image/png";
+    if (h.includes("webp")) return "image/webp";
+    if (h.includes("gif")) return "image/gif";
+    return "image/jpeg";
+  };
+
+  if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
+    try {
+      const imgRes = await fetch(imageUrl);
+      if (!imgRes.ok) {
+        return NextResponse.json(
+          { error: `failed to fetch image (${imgRes.status} from ${imageUrl})` },
+          { status: 400 },
+        );
+      }
+      mediaType = pickMediaType(imgRes.headers.get("content-type") ?? "");
+      const buf = Buffer.from(await imgRes.arrayBuffer());
+      imageBase64 = buf.toString("base64");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown error";
+      return NextResponse.json({ error: `image fetch failed: ${msg}` }, { status: 400 });
+    }
+  } else {
+    // Disk read from public/. Resolve to a path strictly inside public/ to
+    // block path traversal; reject anything that escapes.
+    const publicDir = path.join(process.cwd(), "public");
+    const requested = imageUrl.replace(/^\/+/, "");
+    const resolved = path.resolve(publicDir, requested);
+    if (!resolved.startsWith(publicDir + path.sep) && resolved !== publicDir) {
+      return NextResponse.json({ error: "invalid image path" }, { status: 400 });
+    }
+    try {
+      const buf = await readFile(resolved);
+      mediaType = pickMediaType(path.extname(resolved));
+      imageBase64 = buf.toString("base64");
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "unknown error";
       return NextResponse.json(
-        { error: `failed to fetch image (${imgRes.status} from ${absoluteUrl})` },
-        { status: 400 },
+        { error: `disk read failed (${resolved}): ${msg}` },
+        { status: 404 },
       );
     }
-    const ct = (imgRes.headers.get("content-type") ?? "").toLowerCase();
-    mediaType = ct.includes("png")
-      ? "image/png"
-      : ct.includes("webp")
-        ? "image/webp"
-        : ct.includes("gif")
-          ? "image/gif"
-          : "image/jpeg";
-    const buf = Buffer.from(await imgRes.arrayBuffer());
-    imageBase64 = buf.toString("base64");
-  } catch (err) {
-    const msg = err instanceof Error ? err.message : "unknown error";
-    return NextResponse.json({ error: `image fetch failed: ${msg}` }, { status: 400 });
   }
 
   try {
