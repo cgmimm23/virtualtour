@@ -10,8 +10,10 @@ const NAV: Array<{ href: string; label: string }> = [
   { href: "/admin", label: "Overview" },
   { href: "/admin/users", label: "Users" },
   { href: "/admin/teams", label: "Teams" },
+  { href: "/admin/billing", label: "Billing" },
   { href: "/admin/tours", label: "Tours" },
   { href: "/admin/leads", label: "Leads" },
+  { href: "/admin/settings", label: "Settings" },
 ];
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {

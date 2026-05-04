@@ -28,6 +28,10 @@ export interface Database {
           plan: Plan;
           stripe_customer_id: string | null;
           stripe_subscription_id: string | null;
+          stripe_status: string | null;
+          current_period_end: string | null;
+          cancel_at_period_end: boolean;
+          trial_ends_at: string | null;
           branding_config: unknown | null;
           created_at: string;
           updated_at: string;
@@ -39,11 +43,67 @@ export interface Database {
           plan?: Plan;
           stripe_customer_id?: string | null;
           stripe_subscription_id?: string | null;
+          stripe_status?: string | null;
+          current_period_end?: string | null;
+          cancel_at_period_end?: boolean;
+          trial_ends_at?: string | null;
           branding_config?: unknown | null;
           created_at?: string;
           updated_at?: string;
         };
         Update: Partial<Database["public"]["Tables"]["teams"]["Insert"]>;
+        Relationships: [];
+      };
+      billing_events: {
+        Row: {
+          id: string;
+          team_id: string;
+          type: string;
+          source: "webhook" | "admin" | "system" | "self_serve";
+          actor_user_id: string | null;
+          from_plan: Plan | null;
+          to_plan: Plan | null;
+          amount_cents: number | null;
+          currency: string | null;
+          stripe_event_id: string | null;
+          stripe_object_id: string | null;
+          metadata: unknown | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          team_id: string;
+          type: string;
+          source: "webhook" | "admin" | "system" | "self_serve";
+          actor_user_id?: string | null;
+          from_plan?: Plan | null;
+          to_plan?: Plan | null;
+          amount_cents?: number | null;
+          currency?: string | null;
+          stripe_event_id?: string | null;
+          stripe_object_id?: string | null;
+          metadata?: unknown | null;
+          created_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["billing_events"]["Insert"]>;
+        Relationships: [];
+      };
+      app_secrets: {
+        Row: {
+          key: string;
+          value: string;
+          description: string | null;
+          updated_at: string;
+          updated_by: string | null;
+        };
+        Insert: {
+          key: string;
+          value: string;
+          description?: string | null;
+          updated_at?: string;
+          updated_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["app_secrets"]["Insert"]>;
         Relationships: [];
       };
       team_members: {
