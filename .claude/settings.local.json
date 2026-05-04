@@ -48,7 +48,8 @@
       "WebFetch(domain:www.cgmimm.com)",
       "WebFetch(domain:seo.cgmimm.com)",
       "Bash(git commit -m 'fix: middleware skip /api/, brand palette from cgmimm.com \\(Open Sans + navy + crimson\\) *)",
-      "Bash(git commit -m 'fix: AI auto-name reads scene images from disk instead of self-fetch *)"
+      "Bash(git commit -m 'fix: AI auto-name reads scene images from disk instead of self-fetch *)",
+      "Bash(git commit -m 'fix: resize panoramas with sharp before sending to Claude \\(8 MB JPEGs > 5 MB base64 limit\\) *)"
     ]
   }
 }

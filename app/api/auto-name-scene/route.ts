@@ -2,6 +2,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { NextResponse } from "next/server";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
+import sharp from "sharp";
 
 /**
  * POST /api/auto-name-scene
@@ -66,6 +67,7 @@ export async function POST(req: Request) {
     return "image/jpeg";
   };
 
+  let rawBuf: Buffer;
   if (imageUrl.startsWith("http://") || imageUrl.startsWith("https://")) {
     try {
       const imgRes = await fetch(imageUrl);
@@ -75,9 +77,7 @@ export async function POST(req: Request) {
           { status: 400 },
         );
       }
-      mediaType = pickMediaType(imgRes.headers.get("content-type") ?? "");
-      const buf = Buffer.from(await imgRes.arrayBuffer());
-      imageBase64 = buf.toString("base64");
+      rawBuf = Buffer.from(await imgRes.arrayBuffer());
     } catch (err) {
       const msg = err instanceof Error ? err.message : "unknown error";
       return NextResponse.json({ error: `image fetch failed: ${msg}` }, { status: 400 });
@@ -92,9 +92,7 @@ export async function POST(req: Request) {
       return NextResponse.json({ error: "invalid image path" }, { status: 400 });
     }
     try {
-      const buf = await readFile(resolved);
-      mediaType = pickMediaType(path.extname(resolved));
-      imageBase64 = buf.toString("base64");
+      rawBuf = await readFile(resolved);
     } catch (err) {
       const msg = err instanceof Error ? err.message : "unknown error";
       return NextResponse.json(
@@ -102,6 +100,22 @@ export async function POST(req: Request) {
         { status: 404 },
       );
     }
+  }
+
+  // Resize before sending. The original equirect panoramas are ~8 MB and
+  // base64 inflates them past Anthropic's 5 MB limit. Room labeling doesn't
+  // need high-res — a 768px-long-edge JPEG at quality 80 is ~80 KB, plenty
+  // for "this is a kitchen" identification, and keeps our token count low.
+  try {
+    const resized = await sharp(rawBuf)
+      .resize({ width: 1024, height: 1024, fit: "inside", withoutEnlargement: true })
+      .jpeg({ quality: 80 })
+      .toBuffer();
+    imageBase64 = resized.toString("base64");
+    mediaType = "image/jpeg";
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : "unknown error";
+    return NextResponse.json({ error: `image resize failed: ${msg}` }, { status: 500 });
   }
 
   try {
