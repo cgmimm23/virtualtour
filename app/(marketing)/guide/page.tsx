@@ -13,7 +13,7 @@ export default function GuideIndex() {
     <>
       <section className="border-b border-neutral-200 dark:border-neutral-800 py-16 md:py-20">
         <div className="mx-auto max-w-3xl px-6 text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-500">
+          <span className="text-xs font-semibold uppercase tracking-widest text-brand-600">
             The Tourly Guide
           </span>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">

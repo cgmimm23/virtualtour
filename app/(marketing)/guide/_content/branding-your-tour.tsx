@@ -14,7 +14,7 @@ export function Article() {
       <UL>
         <LI><Strong>Agent card</Strong> — your headshot, name, brokerage, phone, and email pinned to the top-right of the viewer.</LI>
         <LI><Strong>Logo</Strong> — your brokerage or personal-brand logo, shown alongside the property title.</LI>
-        <LI><Strong>Accent color</Strong> — the color used for buttons, the lead-gate CTA, and the loading bar. Defaults to amber.</LI>
+        <LI><Strong>Accent color</Strong> — the color used for buttons, the lead-gate CTA, and the loading bar. Defaults to the Tourly crimson.</LI>
         <LI><Strong>Footer</Strong> — "Powered by Tourly" by default. Removed entirely on the Brokerage plan.</LI>
         <LI><Strong>Contact CTA</Strong> — the call-to-action button label and the action it triggers.</LI>
       </UL>
@@ -75,9 +75,9 @@ export function Article() {
 
       <H2 id="colors">Accent color</H2>
       <P>
-        The default amber is friendly and reads well on every background. If your brand
-        identity has its own color, use it — but pick one with enough contrast against
-        white text to stay readable on the lead-gate button.
+        The default crimson reads well on every background and matches the rest of the
+        Tourly chrome. If your brand identity has its own color, use it — but pick one
+        with enough contrast against white text to stay readable on the lead-gate button.
       </P>
       <P>
         Quick test: the color you pick will appear as a button with white text on top.

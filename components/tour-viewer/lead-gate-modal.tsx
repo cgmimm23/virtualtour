@@ -17,7 +17,7 @@ export function LeadGateModal({ config, branding, onSubmit, onSkip }: LeadGateMo
   const [preferredTime, setPreferredTime] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const accent = branding?.primaryColor ?? "#0ea5e9";
+  const accent = branding?.primaryColor ?? "#205081";
   const collectTime = config.mode === "schedule" || config.collectPreferredTime;
 
   const handleSubmit = (e: React.FormEvent) => {

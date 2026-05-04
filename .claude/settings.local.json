@@ -44,7 +44,10 @@
       "Bash(python -c ' *)",
       "Skill(claude-api)",
       "Bash(git commit -m 'feat: AI auto-name rooms via Claude vision + neutral marketing copy *)",
-      "Bash(git commit -m 'fix: AI auto-name uses base64 \\(Anthropic URL fetcher rejected our host\\) + force light mode site-wide *)"
+      "Bash(git commit -m 'fix: AI auto-name uses base64 \\(Anthropic URL fetcher rejected our host\\) + force light mode site-wide *)",
+      "WebFetch(domain:www.cgmimm.com)",
+      "WebFetch(domain:seo.cgmimm.com)",
+      "Bash(git commit -m 'fix: middleware skip /api/, brand palette from cgmimm.com \\(Open Sans + navy + crimson\\) *)"
     ]
   }
 }

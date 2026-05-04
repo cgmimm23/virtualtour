@@ -75,7 +75,7 @@ export default async function GuideArticlePage({ params }: PageProps) {
               className="group rounded-xl border border-neutral-200 p-4 transition-colors hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:border-neutral-700 dark:hover:bg-neutral-900"
             >
               <div className="text-xs text-neutral-500">← Previous</div>
-              <div className="mt-1 font-semibold text-neutral-900 group-hover:text-amber-600 dark:text-neutral-100 dark:group-hover:text-amber-400">
+              <div className="mt-1 font-semibold text-neutral-900 group-hover:text-brand-600">
                 {prev.title}
               </div>
             </Link>
@@ -86,7 +86,7 @@ export default async function GuideArticlePage({ params }: PageProps) {
               className="group rounded-xl border border-neutral-200 p-4 text-right transition-colors hover:border-neutral-300 hover:bg-neutral-50 dark:border-neutral-800 dark:hover:border-neutral-700 dark:hover:bg-neutral-900 sm:col-start-2"
             >
               <div className="text-xs text-neutral-500">Next →</div>
-              <div className="mt-1 font-semibold text-neutral-900 group-hover:text-amber-600 dark:text-neutral-100 dark:group-hover:text-amber-400">
+              <div className="mt-1 font-semibold text-neutral-900 group-hover:text-brand-600">
                 {next.title}
               </div>
             </Link>

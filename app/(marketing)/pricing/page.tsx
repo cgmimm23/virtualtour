@@ -95,7 +95,7 @@ export default function PricingPage() {
     <>
       <section className="border-b border-neutral-200 dark:border-neutral-800 py-16 md:py-20">
         <div className="mx-auto max-w-3xl px-6 text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-500">
+          <span className="text-xs font-semibold uppercase tracking-widest text-brand-600">
             Pricing
           </span>
           <h1 className="mt-2 text-4xl font-semibold tracking-tight md:text-5xl">
@@ -116,12 +116,12 @@ export default function PricingPage() {
                 key={t.name}
                 className={`relative flex flex-col rounded-2xl border p-6 md:p-8 ${
                   t.highlight
-                    ? "border-amber-400 shadow-2xl ring-1 ring-amber-400/30"
+                    ? "border-brand-500 shadow-2xl ring-1 ring-brand-500/30"
                     : "border-neutral-200 dark:border-neutral-800"
                 } bg-white dark:bg-neutral-950`}
               >
                 {t.highlight ? (
-                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-amber-400 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-900">
+                  <span className="absolute -top-3 left-1/2 -translate-x-1/2 rounded-full bg-accent-500 px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-900">
                     Most popular
                   </span>
                 ) : null}
@@ -135,7 +135,7 @@ export default function PricingPage() {
                   href="/signup"
                   className={`mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-semibold ${
                     t.highlight
-                      ? "bg-amber-400 text-neutral-900 hover:bg-amber-300"
+                      ? "bg-accent-500 text-white hover:bg-amber-300"
                       : "bg-neutral-900 text-white hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
                   }`}
                 >

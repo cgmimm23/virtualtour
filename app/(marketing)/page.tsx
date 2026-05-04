@@ -16,17 +16,17 @@ export default function LandingPage() {
 
 function Hero() {
   return (
-    <section className="relative overflow-hidden border-b border-neutral-200 dark:border-neutral-800">
-      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-neutral-50 to-white dark:from-neutral-950 dark:to-neutral-900" />
-      <div className="absolute inset-x-0 top-0 -z-10 h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-amber-200/40 via-transparent to-transparent dark:from-amber-500/10" />
+    <section className="relative overflow-hidden border-b border-neutral-200">
+      <div className="absolute inset-0 -z-10 bg-gradient-to-b from-brand-50 to-white" />
+      <div className="absolute inset-x-0 top-0 -z-10 h-96 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-brand-200/50 via-transparent to-transparent" />
       <div className="mx-auto max-w-6xl px-6 py-20 md:py-28">
         <div className="mx-auto max-w-3xl text-center">
           <span className="inline-flex items-center gap-2 rounded-full border border-neutral-200 dark:border-neutral-800 bg-white/60 dark:bg-neutral-900/60 px-3 py-1 text-xs font-medium text-neutral-600 dark:text-neutral-400 backdrop-blur">
             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />
             Built for solo agents and small teams
           </span>
-          <h1 className="mt-5 text-4xl font-semibold tracking-tight md:text-6xl">
-            The <span className="bg-gradient-to-r from-amber-500 to-rose-500 bg-clip-text text-transparent">AI virtual tour creator</span> built for real estate
+          <h1 className="mt-5 text-4xl font-semibold tracking-tight text-brand-700 md:text-6xl">
+            The <span className="text-accent-500">AI virtual tour creator</span> built for real estate
           </h1>
           <p className="mt-5 text-lg text-neutral-600 dark:text-neutral-400 md:text-xl">
             Upload 360 photos from any camera. AI auto-names every room and links the
@@ -36,13 +36,13 @@ function Hero() {
           <div className="mt-8 flex flex-col items-center justify-center gap-3 sm:flex-row">
             <Link
               href="/t/kremmen-place?view=1"
-              className="rounded-lg bg-neutral-900 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-neutral-800 dark:bg-white dark:text-neutral-900 dark:hover:bg-neutral-100"
+              className="rounded-lg bg-brand-600 px-5 py-3 text-sm font-semibold text-white shadow-lg hover:bg-brand-700"
             >
               See a live tour →
             </Link>
             <Link
               href="/pricing"
-              className="rounded-lg border border-neutral-300 dark:border-neutral-700 px-5 py-3 text-sm font-semibold hover:bg-neutral-100 dark:hover:bg-neutral-800"
+              className="rounded-lg border border-brand-200 bg-white px-5 py-3 text-sm font-semibold text-brand-700 hover:bg-brand-50"
             >
               View pricing
             </Link>
@@ -129,7 +129,7 @@ function Features() {
               key={it.title}
               className="rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 p-6 transition-shadow hover:shadow-lg"
             >
-              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-amber-100 text-amber-700 dark:bg-amber-950/50 dark:text-amber-400">
+              <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-lg bg-brand-50 text-brand-600">
                 {it.icon}
               </div>
               <h3 className="font-semibold">{it.title}</h3>
@@ -164,7 +164,7 @@ function HowItWorks() {
     <section id="how-it-works" className="border-y border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 py-20">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-500">
+          <span className="text-xs font-semibold uppercase tracking-widest text-brand-600">
             How it works
           </span>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
@@ -202,7 +202,7 @@ function DemoBlock() {
             <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
             <div className="absolute bottom-0 left-0 right-0 p-6 md:p-10">
               <span className="inline-flex items-center gap-1.5 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-white backdrop-blur">
-                <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />
+                <span className="h-1.5 w-1.5 rounded-full bg-accent-500" />
                 Live demo · 29 scenes
               </span>
               <h3 className="mt-3 text-2xl font-semibold text-white md:text-3xl">
@@ -239,7 +239,7 @@ function PricingTeaser() {
     <section className="border-y border-neutral-200 dark:border-neutral-800 bg-neutral-50 dark:bg-neutral-900/40 py-20">
       <div className="mx-auto max-w-6xl px-6">
         <div className="mx-auto max-w-2xl text-center">
-          <span className="text-xs font-semibold uppercase tracking-widest text-amber-600 dark:text-amber-500">
+          <span className="text-xs font-semibold uppercase tracking-widest text-brand-600">
             Pricing
           </span>
           <h2 className="mt-2 text-3xl font-semibold tracking-tight md:text-4xl">
@@ -256,7 +256,7 @@ function PricingTeaser() {
           <PriceCard tier="Brokerage" price={199} highlight={false} blurb="White-label, custom domain, API access." />
         </div>
         <div className="mt-8 text-center">
-          <Link href="/pricing" className="text-sm font-semibold text-amber-600 hover:text-amber-700 dark:text-amber-400 dark:hover:text-amber-300">
+          <Link href="/pricing" className="text-sm font-semibold text-brand-600 hover:text-brand-700">
             See full feature comparison →
           </Link>
         </div>
@@ -271,7 +271,7 @@ function PriceCard({ tier, price, highlight, blurb }: { tier: string; price: num
       <div className="flex items-baseline justify-between">
         <h3 className="font-semibold">{tier}</h3>
         {highlight ? (
-          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${highlight ? "bg-amber-400 text-neutral-900" : ""}`}>
+          <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${highlight ? "bg-accent-500 text-white" : ""}`}>
             Most popular
           </span>
         ) : null}

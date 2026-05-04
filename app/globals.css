@@ -1,23 +1,56 @@
 @import "tailwindcss";
+@import url("https://fonts.googleapis.com/css2?family=Open+Sans:wght@300;400;600;700;800&display=swap");
 
 /*
- * Force light mode. We had `dark:` variants written everywhere via
- * Tailwind's default `prefers-color-scheme` trigger, which on a phone in
- * system dark mode produced an inconsistent half-baked theme. Until we
- * audit and ship a real dark mode, scope the `dark:` variant to a `.dark`
- * class that we never add — effectively disabling auto dark mode.
+ * Force light mode site-wide. Auto dark mode was producing an inconsistent
+ * half-baked theme on phones; we'll re-enable with a proper toggle later.
  */
 @custom-variant dark (&:where(.dark, .dark *));
+
+/*
+ * Brand palette derived from cgmimm.com / seo.cgmimm.com:
+ *   - Navy primary: #205081 (cgmimm header), with deeper #1a3a5c (seo) and #2367a0 (seo lighter)
+ *   - Crimson accent: #d9534f / #c71a1a (cgmimm CTAs)
+ *   - Section bg: #f8f9fb (seo near-white)
+ *   - Body text: #292929 (cgmimm) and #5a5a5a (muted)
+ *   - Font: Open Sans
+ */
+@theme inline {
+  --font-sans: "Open Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+
+  --color-brand-50: #f1f6fc;
+  --color-brand-100: #dde9f5;
+  --color-brand-200: #b9d0e8;
+  --color-brand-300: #8fb1d7;
+  --color-brand-400: #5688b9;
+  --color-brand-500: #2367a0;
+  --color-brand-600: #205081;
+  --color-brand-700: #1a3a5c;
+  --color-brand-800: #122846;
+  --color-brand-900: #0f1e30;
+
+  --color-accent-50: #fdf2f2;
+  --color-accent-100: #fbe1e1;
+  --color-accent-300: #f3999c;
+  --color-accent-500: #d9534f;
+  --color-accent-600: #c71a1a;
+  --color-accent-700: #a01515;
+
+  --color-ink: #292929;
+  --color-ink-muted: #5a5a5a;
+  --color-surface: #ffffff;
+  --color-surface-soft: #f8f9fb;
+}
 
 :root {
   color-scheme: light;
   --background: 0 0% 100%;
-  --foreground: 240 10% 3.9%;
-  --muted: 240 4.8% 95.9%;
-  --muted-foreground: 240 3.8% 46.1%;
-  --border: 240 5.9% 90%;
-  --primary: 240 5.9% 10%;
-  --primary-foreground: 0 0% 98%;
+  --foreground: 0 0% 16%;
+  --muted: 220 14% 96%;
+  --muted-foreground: 0 0% 35%;
+  --border: 220 13% 91%;
+  --primary: 213 60% 32%;
+  --primary-foreground: 0 0% 100%;
 }
 
 html,
@@ -26,10 +59,11 @@ body {
 }
 
 body {
-  background: hsl(var(--background));
-  color: hsl(var(--foreground));
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
 }
 
 /* Marzipano takes over the canvas; no padding/margins inside the stage */

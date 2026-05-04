@@ -93,7 +93,7 @@ export interface BrandingConfig {
   agentEmail?: string;
   brokerageName?: string;
   brokerageLogoUrl?: string;
-  /** Hex color, e.g. "#0ea5e9" */
+  /** Hex color, e.g. "#205081" */
   primaryColor?: string;
 }
 

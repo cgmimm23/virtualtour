@@ -53,7 +53,7 @@ export function BrandingModal({ branding, onSave, onClose }: BrandingModalProps)
           <Field label="Brokerage" value={draft.brokerageName ?? ""} onChange={(v) => set("brokerageName", v)} placeholder="Acme Realty" />
           <Field label="Phone" value={draft.agentPhone ?? ""} onChange={(v) => set("agentPhone", v)} placeholder="+1 555 123 4567" />
           <Field label="Email" value={draft.agentEmail ?? ""} onChange={(v) => set("agentEmail", v)} placeholder="agent@brokerage.com" type="email" />
-          <Field label="Primary color" value={draft.primaryColor ?? ""} onChange={(v) => set("primaryColor", v)} placeholder="#0ea5e9" />
+          <Field label="Primary color" value={draft.primaryColor ?? ""} onChange={(v) => set("primaryColor", v)} placeholder="#205081" />
           <div className="flex flex-col gap-1 sm:col-span-2">
             <label className="text-xs font-medium text-neutral-500">Headshot</label>
             <div className="flex items-center gap-3">

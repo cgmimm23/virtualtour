@@ -104,7 +104,7 @@ const calloutStyles: Record<CalloutTone, { ring: string; bg: string; text: strin
   },
   warn: {
     ring: "ring-amber-300 dark:ring-amber-900",
-    bg: "bg-amber-50 dark:bg-amber-950/40",
+    bg: "bg-brand-50 dark:bg-amber-950/40",
     text: "text-amber-900 dark:text-amber-100",
     label: "Heads up",
     icon: <Triangle />,

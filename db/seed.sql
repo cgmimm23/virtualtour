@@ -8,7 +8,7 @@
 
 insert into teams (id, name, slug, plan)
 values (
-  '00000000-0000-0000-0000-00000000d3m0',
+  '00000000-0000-0000-0000-0000000d0d0d',
   'Tourly Demo',
   'tourly-demo',
   'team'
@@ -21,7 +21,7 @@ insert into tours (
   branding, lead_gate, details, cover_scene_id
 ) values (
   '11111111-1111-1111-1111-111111111111',
-  '00000000-0000-0000-0000-00000000d3m0',
+  '00000000-0000-0000-0000-0000000d0d0d',
   'kremmen-place',
   'Kremmen Place',
   'Kremmen Place',

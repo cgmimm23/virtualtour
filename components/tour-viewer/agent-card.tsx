@@ -20,7 +20,7 @@ export function AgentCard({ branding, variant = "compact", onContact }: AgentCar
     .join("")
     .toUpperCase();
 
-  const accent = primaryColor ?? "#0ea5e9";
+  const accent = primaryColor ?? "#205081";
 
   return (
     <div
