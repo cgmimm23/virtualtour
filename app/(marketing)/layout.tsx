@@ -4,9 +4,42 @@ import { Logo } from "@/components/brand/logo";
 import { MobileNav } from "@/components/marketing/mobile-nav";
 
 export const metadata: Metadata = {
-  title: "VITA · Virtual Interactive Tour Application by CGMIMM",
+  metadataBase: new URL(
+    process.env.NEXT_PUBLIC_APP_URL ?? "https://virtualtour.cgmimm.com",
+  ),
+  title: {
+    default: "VITA · AI Virtual Tour Creator for Real Estate",
+    template: "%s · VITA by CGMIMM",
+  },
   description:
-    "AI-powered 360° virtual tours for real estate. Camera-agnostic, lead-capturing, ready in minutes. Built by CGMIMM.",
+    "AI-powered 360° virtual tours for real estate agents. Upload from any camera; auto-name rooms; capture buyer leads. Free 14-day trial.",
+  keywords: [
+    "virtual tour",
+    "real estate virtual tour",
+    "AI virtual tour",
+    "360 virtual tour",
+    "real estate marketing",
+    "lead capture",
+    "Matterport alternative",
+    "virtual tour software",
+  ],
+  applicationName: "VITA",
+  authors: [{ name: "CGMIMM", url: "https://www.cgmimm.com" }],
+  creator: "CGMIMM",
+  openGraph: {
+    type: "website",
+    siteName: "VITA by CGMIMM",
+    title: "VITA · AI Virtual Tour Creator for Real Estate",
+    description:
+      "AI-powered 360° virtual tours for real estate. Camera-agnostic, lead-capturing, ready in minutes.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "VITA · AI Virtual Tour Creator",
+    description:
+      "AI-powered 360° virtual tours for real estate. Free 14-day trial.",
+  },
+  robots: { index: true, follow: true },
 };
 
 export default function MarketingLayout({ children }: { children: React.ReactNode }) {
@@ -72,8 +105,12 @@ function Footer() {
             <Logo />
           </Link>
           <p className="mt-3 max-w-xs text-neutral-500">
-            AI-powered 360° virtual tours for real estate agents. Camera-agnostic,
-            lead-capture-first, ready in minutes.
+            AI-powered 360°{" "}
+            <Link href="/t/kremmen-place?view=1" className="text-brand-600 hover:underline">
+              virtual tours
+            </Link>{" "}
+            for real estate agents. Camera-agnostic, lead-capture-first, ready in
+            minutes.
           </p>
           <p className="mt-4 text-xs text-neutral-400">
             © {new Date().getFullYear()} VITA · CGMIMM. All rights reserved.
@@ -85,7 +122,8 @@ function Footer() {
             <li><Link href="/#features" className="hover:text-neutral-900 dark:hover:text-neutral-100">Features</Link></li>
             <li><Link href="/pricing" className="hover:text-neutral-900 dark:hover:text-neutral-100">Pricing</Link></li>
             <li><Link href="/guide" className="hover:text-neutral-900 dark:hover:text-neutral-100">Guide</Link></li>
-            <li><Link href="/t/kremmen-place?view=1" className="hover:text-neutral-900 dark:hover:text-neutral-100">Live demo</Link></li>
+            <li><Link href="/t/kremmen-place?view=1" className="hover:text-neutral-900 dark:hover:text-neutral-100">Sample virtual tour</Link></li>
+            <li><Link href="/guide" className="hover:text-neutral-900 dark:hover:text-neutral-100">Virtual tour guide</Link></li>
           </ul>
         </div>
         <div>

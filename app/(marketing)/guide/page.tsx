@@ -3,9 +3,17 @@ import type { Metadata } from "next";
 import { ARTICLES, SECTION_BLURB, SECTION_ORDER } from "./_content/registry";
 
 export const metadata: Metadata = {
-  title: "The Tourly Guide — everything about making 360° real-estate tours",
+  title: "The Virtual Tour Guide — Cameras, Hotspots, Lead Capture",
   description:
-    "Free, opinionated guide to shooting, building, and publishing virtual tours that actually capture leads. Cameras, exposure, hotspots, branding, distribution.",
+    "Free, opinionated guide to making 360° real-estate virtual tours that capture leads. Choosing a camera, exporting equirectangular images, planning the shoot, building hotspots, branding, distribution, analytics — every chapter.",
+  alternates: { canonical: "/guide" },
+  openGraph: {
+    title: "The VITA Guide · Real-Estate Virtual Tours",
+    description:
+      "Free guide to shooting, building, and publishing 360° real-estate virtual tours.",
+    url: "/guide",
+    type: "website",
+  },
 };
 
 export default function GuideIndex() {

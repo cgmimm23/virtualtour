@@ -1,8 +1,22 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { getPricingTiers } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
 
+export const metadata: Metadata = {
+  title: "Pricing — Virtual Tour Plans for Real Estate Agents",
+  description:
+    "Simple monthly plans for VITA virtual tours: Solo, Team, and Brokerage. 14-day free trial on every plan. No setup fees, no hardware required, cancel anytime.",
+  alternates: { canonical: "/pricing" },
+  openGraph: {
+    title: "VITA Pricing · Virtual Tour Plans",
+    description:
+      "Three simple plans for AI-powered real estate virtual tours. Free 14-day trial.",
+    url: "/pricing",
+    type: "website",
+  },
+};
 
 const FAQS = [
   {

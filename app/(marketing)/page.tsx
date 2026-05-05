@@ -1,7 +1,22 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import { getPricingTiers } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  title: "AI Virtual Tour Creator for Real Estate Agents",
+  description:
+    "VITA is the AI-powered virtual tour creator for real estate. Upload 360° photos from any camera, auto-name every room, capture buyer leads. Free 14-day trial, no card required.",
+  alternates: { canonical: "/" },
+  openGraph: {
+    title: "VITA · The AI Virtual Tour Creator for Real Estate",
+    description:
+      "Upload 360° photos. AI names every room. Capture buyer leads automatically. Built for real estate agents.",
+    url: "/",
+    type: "website",
+  },
+};
 
 export default async function LandingPage() {
   const tiers = await getPricingTiers();

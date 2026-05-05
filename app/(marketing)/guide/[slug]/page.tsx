@@ -20,12 +20,20 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const article = getArticle(slug);
   if (!article) return {};
   return {
-    title: `${article.title} — Tourly Guide`,
+    title: article.title,
     description: article.description,
+    alternates: { canonical: `/guide/${slug}` },
     openGraph: {
       title: article.title,
       description: article.description,
+      url: `/guide/${slug}`,
       type: "article",
+      section: article.section,
+    },
+    twitter: {
+      card: "summary_large_image",
+      title: article.title,
+      description: article.description,
     },
   };
 }
@@ -66,6 +74,32 @@ export default async function GuideArticlePage({ params }: PageProps) {
       <div className="text-base">
         <Article />
       </div>
+
+      {/* CTA — every article funnels back to a live virtual tour example. */}
+      <aside className="my-10 rounded-xl border border-brand-200 bg-brand-50 p-6">
+        <h2 className="text-lg font-semibold text-brand-700">
+          See a live real-estate virtual tour
+        </h2>
+        <p className="mt-1 text-sm text-neutral-700">
+          The concepts in this chapter are easier to internalize when you&apos;re looking
+          at the real thing. Open the Kremmen Place virtual tour to see hotspots,
+          lead capture, agent branding, and the AI-named rooms in action.
+        </p>
+        <div className="mt-4 flex flex-wrap gap-3">
+          <Link
+            href="/t/kremmen-place?view=1"
+            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-semibold text-white hover:bg-brand-700"
+          >
+            Open the live virtual tour →
+          </Link>
+          <Link
+            href="/signup"
+            className="rounded-md border border-brand-300 bg-white px-4 py-2 text-sm font-semibold text-brand-700 hover:bg-brand-100"
+          >
+            Start your own virtual tour (free trial)
+          </Link>
+        </div>
+      </aside>
 
       <footer className="mt-16 border-t border-neutral-200 pt-8 dark:border-neutral-800">
         <div className="grid gap-3 sm:grid-cols-2">
