@@ -88,6 +88,36 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["billing_events"]["Insert"]>;
         Relationships: [];
       };
+      tour_chats: {
+        Row: {
+          id: string;
+          tour_id: string;
+          session_id: string;
+          email: string | null;
+          name: string | null;
+          messages: Array<{ role: "user" | "assistant"; content: string }>;
+          message_count: number;
+          user_agent: string | null;
+          referrer: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          tour_id: string;
+          session_id: string;
+          email?: string | null;
+          name?: string | null;
+          messages?: Array<{ role: "user" | "assistant"; content: string }>;
+          message_count?: number;
+          user_agent?: string | null;
+          referrer?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: Partial<Database["public"]["Tables"]["tour_chats"]["Insert"]>;
+        Relationships: [];
+      };
       pricing_tiers: {
         Row: {
           plan: Plan;
@@ -175,6 +205,8 @@ export interface Database {
           details: unknown | null;
           expires_at: string | null;
           webhook_url: string | null;
+          ai_description: string | null;
+          ai_description_generated_at: string | null;
           created_at: string;
           updated_at: string;
         };
@@ -193,6 +225,8 @@ export interface Database {
           highlights?: string[] | null;
           details?: unknown | null;
           expires_at?: string | null;
+          ai_description?: string | null;
+          ai_description_generated_at?: string | null;
           webhook_url?: string | null;
           created_at?: string;
           updated_at?: string;
@@ -247,6 +281,7 @@ export interface Database {
           pitch: number;
           label: string;
           payload: unknown;
+          ai_generated: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -258,6 +293,7 @@ export interface Database {
           pitch: number;
           label?: string;
           payload?: unknown;
+          ai_generated?: boolean;
           created_at?: string;
           updated_at?: string;
         };
@@ -278,6 +314,9 @@ export interface Database {
           duration_ms: number;
           captured_at: string;
           agent_notified_at: string | null;
+          ai_score: number | null;
+          ai_reason: string | null;
+          ai_scored_at: string | null;
         };
         Insert: {
           id?: string;
@@ -292,6 +331,9 @@ export interface Database {
           duration_ms?: number;
           captured_at?: string;
           agent_notified_at?: string | null;
+          ai_score?: number | null;
+          ai_reason?: string | null;
+          ai_scored_at?: string | null;
         };
         Update: Partial<Database["public"]["Tables"]["leads"]["Insert"]>;
         Relationships: [];

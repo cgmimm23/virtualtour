@@ -34,6 +34,7 @@ import { HotspotMarker } from "@/components/tour-viewer/hotspot-marker";
 import { AgentCard } from "@/components/tour-viewer/agent-card";
 import { LeadGateModal } from "@/components/tour-viewer/lead-gate-modal";
 import { SceneStrip } from "@/components/tour-viewer/scene-strip";
+import { BuyerChat } from "@/components/tour-viewer/buyer-chat";
 import { PlaybackControls, SideArrows } from "@/components/tour-viewer/playback-controls";
 
 // Marzipano touches `window` on import. Disable SSR for the viewer.
@@ -1028,6 +1029,18 @@ export function TourExperience({
             </div>
           ) : null}
         </div>
+
+        {/* Buyer chatbot — bottom-right, public tour only */}
+        {!isKioskMode && !isPreviewMode ? (
+          <div className="pointer-events-none absolute bottom-4 right-4 z-20 flex justify-end">
+            <BuyerChat
+              tourSlug={tour.slug}
+              agentName={!isNoBrandMode ? tour.branding?.agentName : undefined}
+              agentPhotoUrl={!isNoBrandMode ? tour.branding?.agentPhotoUrl : undefined}
+              primaryColor={tour.branding?.primaryColor}
+            />
+          </div>
+        ) : null}
 
         {gateOpen && tour.leadGate ? (
           <LeadGateModal
