@@ -14,6 +14,7 @@ import type {
 } from "@/lib/tour/types";
 import { fireLeadWebhook, hasGateBeenPassed, markGatePassed } from "@/lib/tour/leads";
 import { newId } from "@/lib/tour/id";
+import { deleteScene as deleteSceneAction } from "@/lib/tour/upload-actions";
 import { ScenePicker } from "./scene-picker";
 import { HotspotPanel } from "./hotspot-panel";
 import { InfoModal } from "./info-modal";
@@ -686,6 +687,43 @@ export function TourExperience({
     [commitTour],
   );
 
+  const handleDeleteScene = useCallback(
+    async (sceneId: string) => {
+      const scene = tour.scenes.find((s) => s.id === sceneId);
+      const label = scene?.name ? `"${scene.name}"` : "this scene";
+      if (!window.confirm(`Delete ${label}? This removes the photo and its hotspots permanently.`)) {
+        return;
+      }
+      // 1) Yank the scene from local state FIRST so the debounced save can't
+      //    upsert it back before the server-side delete lands.
+      commitTour((prev) => {
+        const nextScenes = prev.scenes.filter((s) => s.id !== sceneId);
+        const next: Tour = { ...prev, scenes: nextScenes };
+        if (prev.coverSceneId === sceneId) {
+          next.coverSceneId = nextScenes[0]?.id ?? "";
+        }
+        if (prev.highlights?.includes(sceneId)) {
+          next.highlights = prev.highlights.filter((id) => id !== sceneId);
+        }
+        return next;
+      });
+      // 2) If the active scene was the one we just deleted, jump to another.
+      if (currentSceneId === sceneId) {
+        const fallback = tour.scenes.find((s) => s.id !== sceneId);
+        setCurrentSceneId(fallback?.id ?? "");
+        setSelectedHotspotId(null);
+      }
+      // 3) Server-side delete: row + R2 objects.
+      const result = await deleteSceneAction({ tourId: tour.id, sceneId });
+      if (!result.ok) {
+        // Save attempts will reconcile state via the next debounced save —
+        // but tell the user something went wrong so they can retry.
+        window.alert(`Couldn't fully delete the scene: ${result.error}`);
+      }
+    },
+    [commitTour, currentSceneId, tour.scenes, tour.id],
+  );
+
   const handleSaveBranding = useCallback(
     (next: BrandingConfig) => {
       commitTour((prev) => ({ ...prev, branding: next }));
@@ -1147,6 +1185,7 @@ export function TourExperience({
             onRename={handleRenameScene}
             onSetCover={handleSetCover}
             onReorder={handleReorderScenes}
+            onDelete={handleDeleteScene}
             editMode={editMode}
           />
         </aside>

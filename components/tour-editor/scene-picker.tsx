@@ -11,6 +11,7 @@ interface ScenePickerProps {
   onRename?: (sceneId: string, name: string) => void;
   onSetCover?: (sceneId: string) => void;
   onReorder?: (orderedIds: string[]) => void;
+  onDelete?: (sceneId: string) => void;
   editMode: boolean;
 }
 
@@ -25,6 +26,7 @@ export function ScenePicker({
   onRename,
   onSetCover,
   onReorder,
+  onDelete,
   editMode,
 }: ScenePickerProps) {
   const [draggingId, setDraggingId] = useState<string | null>(null);
@@ -163,7 +165,32 @@ export function ScenePicker({
                 <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
               </svg>
             </button>
-          ) : isCover ? (
+          ) : null}
+          {editMode && onDelete ? (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                onDelete(s.id);
+              }}
+              className={`flex-shrink-0 rounded p-1 transition-colors ${
+                isCurrent
+                  ? "text-white/40 hover:text-red-300"
+                  : "text-neutral-400 hover:text-red-600"
+              }`}
+              aria-label="Delete scene"
+              title="Delete scene"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="3 6 5 6 21 6" />
+                <path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" />
+                <path d="M10 11v6" />
+                <path d="M14 11v6" />
+                <path d="M9 6V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2" />
+              </svg>
+            </button>
+          ) : null}
+          {!editMode && isCover ? (
             <span
               className={`flex-shrink-0 ${isCurrent ? "text-amber-300" : "text-amber-500"}`}
               title="Cover scene"

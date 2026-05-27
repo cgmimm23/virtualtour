@@ -214,6 +214,81 @@ export async function completeSceneUpload(params: {
   return { ok: true };
 }
 
+/**
+ * Permanently delete a scene: the DB row (which cascades to hotspots) AND
+ * the underlying R2 objects (source.<ext> + display.jpg if present).
+ *
+ * The caller is responsible for removing the scene from any in-memory tour
+ * state — TourExperience does this via commitTour before invoking the action
+ * so the auto-save debounce doesn't recreate the row.
+ */
+export async function deleteScene(params: {
+  tourId: string;
+  sceneId: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { tourId, sceneId } = params;
+  const { team } = await requireActiveTeam();
+  const supabase = await createClient();
+
+  const { data: tour } = await supabase
+    .from("tours")
+    .select("id, team_id, cover_scene_id")
+    .eq("id", tourId)
+    .maybeSingle();
+  if (!tour || tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
+
+  // Pull the scene to learn its R2 key, then delete the row.
+  const { data: scene } = await supabase
+    .from("scenes")
+    .select("id, source_image_url")
+    .eq("id", sceneId)
+    .eq("tour_id", tourId)
+    .maybeSingle();
+
+  if (scene) {
+    // Delete R2 objects best-effort. Failures here shouldn't block the DB
+    // delete — orphaned R2 objects are cheaper than orphaned DB rows.
+    const candidates: string[] = [];
+    const url = scene.source_image_url;
+    if (typeof url === "string" && url.startsWith("r2:")) {
+      const key = url.slice("r2:".length);
+      candidates.push(key);
+      // If we're pointed at display.jpg, also try to remove the source.<ext>
+      // sibling so the upload pair doesn't leak.
+      if (key.endsWith("/display.jpg")) {
+        const prefix = key.slice(0, -"display.jpg".length);
+        candidates.push(`${prefix}source.jpg`);
+        candidates.push(`${prefix}source.jpeg`);
+        candidates.push(`${prefix}source.png`);
+        candidates.push(`${prefix}source.webp`);
+      }
+    }
+    for (const k of candidates) {
+      try {
+        await deleteObject(k);
+      } catch {
+        // ignore — R2 cleanup is best effort
+      }
+    }
+  }
+
+  const { error: delErr } = await supabase
+    .from("scenes")
+    .delete()
+    .eq("id", sceneId)
+    .eq("tour_id", tourId);
+  if (delErr) return { ok: false, error: delErr.message };
+
+  // If the deleted scene was the cover, clear it so a future load picks a
+  // different first scene via rowToTour's fallback.
+  if (tour.cover_scene_id === sceneId) {
+    await supabase.from("tours").update({ cover_scene_id: null }).eq("id", tourId);
+  }
+
+  revalidatePath(`/editor/${tourId}`);
+  return { ok: true };
+}
+
 export async function abortSceneUpload(params: {
   tourId: string;
   sceneId: string;
