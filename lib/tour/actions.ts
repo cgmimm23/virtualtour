@@ -130,12 +130,26 @@ export async function saveTour(tour: Tour): Promise<{ ok: true } | { ok: false; 
 // that skips the full saveTour replace-all path — used by the Tour info
 // modal where the user is only touching metadata and we don't want to
 // reconcile with the in-memory editor state.
+//
+// Renaming the title also regenerates the URL slug (kebab-case of the new
+// title, suffixed to avoid collisions). For a published tour this means
+// previously-shared links 404 — a stability trade-off we accept because
+// agents expect /t/<address-rename> to match the rename they just did.
+
+function slugify(input: string): string {
+  return input
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
 
 export async function updateTourMeta(params: {
   tourId: string;
   title: string;
   propertyAddress: string;
-}): Promise<{ ok: true } | { ok: false; error: string }> {
+}): Promise<{ ok: true; slug: string } | { ok: false; error: string }> {
   const { tourId } = params;
   const title = params.title.trim().slice(0, 120);
   const propertyAddress = params.propertyAddress.trim().slice(0, 240) || null;
@@ -146,20 +160,50 @@ export async function updateTourMeta(params: {
 
   const { data: existing } = await supabase
     .from("tours")
-    .select("id, team_id")
+    .select("id, team_id, slug")
     .eq("id", tourId)
     .maybeSingle();
   if (!existing || existing.team_id !== team.id) return { ok: false, error: "Forbidden." };
 
+  // Compute a fresh slug. Keep the existing one if it already matches the
+  // new title (avoid pointless writes / version churn).
+  const baseSlug = slugify(title) || "tour";
+  let nextSlug = existing.slug;
+  if (existing.slug !== baseSlug && !existing.slug.startsWith(`${baseSlug}-`)) {
+    nextSlug = baseSlug;
+    // Find a free variant. Exclude our own tour from the uniqueness check so
+    // re-running with the same title doesn't ladder up suffixes.
+    for (let i = 1; i < 50; i++) {
+      const candidate = i === 1 ? baseSlug : `${baseSlug}-${i}`;
+      const { data: clash } = await supabase
+        .from("tours")
+        .select("id")
+        .eq("slug", candidate)
+        .neq("id", tourId)
+        .maybeSingle();
+      if (!clash) {
+        nextSlug = candidate;
+        break;
+      }
+    }
+    // Final fallback: stamp with a timestamp if 50 collisions happened
+    // somehow. Effectively unreachable, but safer than infinite loop.
+    if (!nextSlug || nextSlug === existing.slug) {
+      nextSlug = `${baseSlug}-${Date.now().toString(36)}`;
+    }
+  }
+
   const { error } = await supabase
     .from("tours")
-    .update({ title, property_address: propertyAddress })
+    .update({ title, property_address: propertyAddress, slug: nextSlug })
     .eq("id", tourId);
   if (error) return { ok: false, error: error.message };
 
   revalidatePath(`/editor/${tourId}`);
+  revalidatePath(`/t/${existing.slug}`);
+  revalidatePath(`/t/${nextSlug}`);
   revalidatePath("/dashboard");
-  return { ok: true };
+  return { ok: true, slug: nextSlug };
 }
 
 // publishTour / unpublishTour -------------------------------------------
