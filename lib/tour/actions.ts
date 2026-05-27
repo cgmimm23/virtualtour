@@ -6,6 +6,7 @@ import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Tour } from "./types";
 import { rowToTour, tourToRows, type TourWithRelations } from "./db-mapper";
+import { dehydrateImageUrl } from "@/lib/r2/resolve";
 
 // loadTour ---------------------------------------------------------------
 //
@@ -56,7 +57,17 @@ export async function saveTour(tour: Tour): Promise<{ ok: true } | { ok: false; 
   if (!existing) return { ok: false, error: "Tour not found." };
   if (existing.team_id !== team.id) return { ok: false, error: "Forbidden." };
 
-  const { tourRow, scenes, hotspots } = tourToRows(tour, team.id);
+  // Convert any presigned R2 URLs the client round-tripped back to bare
+  // `r2:<key>` refs before persisting. The page renderer re-signs on read.
+  const dehydrated: Tour = {
+    ...tour,
+    scenes: tour.scenes.map((s) => ({ ...s, imageUrl: dehydrateImageUrl(s.imageUrl) })),
+    floorPlan: tour.floorPlan
+      ? { ...tour.floorPlan, imageUrl: dehydrateImageUrl(tour.floorPlan.imageUrl) }
+      : tour.floorPlan,
+  };
+
+  const { tourRow, scenes, hotspots } = tourToRows(dehydrated, team.id);
 
   // 1) Tour metadata.
   const { error: tourErr } = await supabase

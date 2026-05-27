@@ -3,6 +3,7 @@ import { Suspense } from "react";
 import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { rowToTour, type TourWithRelations } from "@/lib/tour/db-mapper";
+import { resolveTourImageUrls } from "@/lib/r2/resolve";
 import { EditorTourExperience } from "./editor-tour-experience";
 
 interface PageProps {
@@ -26,7 +27,9 @@ export default async function EditTourPage({ params }: PageProps) {
   if (error) throw new Error(error.message);
   if (!data) notFound();
 
-  const tour = rowToTour(data as unknown as TourWithRelations);
+  const tour = await resolveTourImageUrls(
+    rowToTour(data as unknown as TourWithRelations),
+  );
 
   return (
     <Suspense

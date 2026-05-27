@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import { fetchPublicTourBySlug } from "@/lib/tour/public";
+import { resolveTourImageUrls } from "@/lib/r2/resolve";
 import { PublicTourExperience } from "@/components/tour-editor/public-tour-experience";
 import type { Tour } from "@/lib/tour/types";
 
@@ -11,8 +12,9 @@ interface PageProps {
 
 export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
   const { slug } = await params;
-  const tour = await fetchPublicTourBySlug(slug);
-  if (!tour) return {};
+  const raw = await fetchPublicTourBySlug(slug);
+  if (!raw) return {};
+  const tour = await resolveTourImageUrls(raw);
   const cover = tour.scenes.find((s) => s.id === tour.coverSceneId) ?? tour.scenes[0];
   const desc = describe(tour);
   return {
@@ -35,8 +37,9 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 export default async function TourPage({ params }: PageProps) {
   const { slug } = await params;
-  const tour = await fetchPublicTourBySlug(slug);
-  if (!tour) notFound();
+  const raw = await fetchPublicTourBySlug(slug);
+  if (!raw) notFound();
+  const tour = await resolveTourImageUrls(raw);
 
   return (
     <>

@@ -5,6 +5,9 @@ build/
 .env
 .env.local
 .env*.local
+
+# Temporary DO app-spec dumps used by doctl apps update — contains plaintext secrets.
+.do-spec*.yaml
 *.log
 .DS_Store
 .vercel
