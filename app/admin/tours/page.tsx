@@ -89,12 +89,13 @@ export default async function AdminTours() {
               <th className="px-5 py-2 text-right font-medium">Views</th>
               <th className="px-5 py-2 text-right font-medium">Leads</th>
               <th className="px-5 py-2 text-left font-medium">Updated</th>
+              <th className="px-5 py-2 text-right font-medium">Actions</th>
             </tr>
           </thead>
           <tbody>
             {tours.length === 0 ? (
               <tr>
-                <td colSpan={8} className="px-5 py-12 text-center text-neutral-500">
+                <td colSpan={9} className="px-5 py-12 text-center text-neutral-500">
                   No tours yet.
                 </td>
               </tr>
@@ -133,6 +134,14 @@ export default async function AdminTours() {
                   <td className="px-5 py-2.5 text-right tabular-nums">{t.leadsCount}</td>
                   <td className="px-5 py-2.5 text-xs text-neutral-500">
                     {new Date(t.updatedAt).toLocaleDateString()}
+                  </td>
+                  <td className="px-5 py-2.5 text-right">
+                    <Link
+                      href={`/editor/${t.id}`}
+                      className="rounded-md border border-neutral-300 px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-100"
+                    >
+                      Edit →
+                    </Link>
                   </td>
                 </tr>
               ))

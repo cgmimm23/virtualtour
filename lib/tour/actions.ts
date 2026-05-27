@@ -2,11 +2,11 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import type { Tour } from "./types";
 import { rowToTour, tourToRows, type TourWithRelations } from "./db-mapper";
 import { dehydrateImageUrl } from "@/lib/r2/resolve";
+import { authorizeTourAccess } from "./access";
 
 // loadTour ---------------------------------------------------------------
 //
@@ -43,20 +43,10 @@ export async function loadTour(tourId: string): Promise<Tour | null> {
 // edit. Worth the simplicity at this scope.
 
 export async function saveTour(tour: Tour): Promise<{ ok: true } | { ok: false; error: string }> {
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tour.id);
+  if (!access.ok) return { ok: false, error: access.error };
+  const teamId = access.teamId;
   const supabase = await createClient();
-
-  // Defensive scope check — RLS will also reject, but a clear error message
-  // beats "0 rows updated".
-  const { data: existing, error: fetchError } = await supabase
-    .from("tours")
-    .select("id, team_id")
-    .eq("id", tour.id)
-    .maybeSingle();
-
-  if (fetchError) return { ok: false, error: fetchError.message };
-  if (!existing) return { ok: false, error: "Tour not found." };
-  if (existing.team_id !== team.id) return { ok: false, error: "Forbidden." };
 
   // Convert any presigned R2 URLs the client round-tripped back to bare
   // `r2:<key>` refs before persisting. The page renderer re-signs on read.
@@ -68,7 +58,7 @@ export async function saveTour(tour: Tour): Promise<{ ok: true } | { ok: false; 
       : tour.floorPlan,
   };
 
-  const { tourRow, scenes, hotspots } = tourToRows(dehydrated, team.id);
+  const { tourRow, scenes, hotspots } = tourToRows(dehydrated, teamId);
 
   // 1) Tour metadata.
   const { error: tourErr } = await supabase
@@ -155,15 +145,16 @@ export async function updateTourMeta(params: {
   const propertyAddress = params.propertyAddress.trim().slice(0, 240) || null;
   if (!title) return { ok: false, error: "Title can't be empty." };
 
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) return { ok: false, error: access.error };
   const supabase = await createClient();
 
   const { data: existing } = await supabase
     .from("tours")
-    .select("id, team_id, slug")
+    .select("id, slug")
     .eq("id", tourId)
     .maybeSingle();
-  if (!existing || existing.team_id !== team.id) return { ok: false, error: "Forbidden." };
+  if (!existing) return { ok: false, error: "Tour not found." };
 
   // Compute a fresh slug. Keep the existing one if it already matches the
   // new title (avoid pointless writes / version churn).
@@ -212,13 +203,13 @@ export async function setTourStatus(
   tourId: string,
   status: "draft" | "published",
 ): Promise<void> {
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) throw new Error(access.error);
   const supabase = await createClient();
   const { error } = await supabase
     .from("tours")
     .update({ status })
-    .eq("id", tourId)
-    .eq("team_id", team.id);
+    .eq("id", tourId);
   if (error) throw new Error(error.message);
   revalidatePath(`/dashboard`);
   revalidatePath(`/editor/${tourId}`);
@@ -227,13 +218,10 @@ export async function setTourStatus(
 // deleteTour ------------------------------------------------------------
 
 export async function deleteTour(tourId: string): Promise<void> {
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) throw new Error(access.error);
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("tours")
-    .delete()
-    .eq("id", tourId)
-    .eq("team_id", team.id);
+  const { error } = await supabase.from("tours").delete().eq("id", tourId);
   if (error) throw new Error(error.message);
   revalidatePath("/dashboard");
   redirect("/dashboard");

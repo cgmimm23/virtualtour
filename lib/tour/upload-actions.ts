@@ -17,8 +17,8 @@
 // in lib/r2/resolve.ts.
 
 import { revalidatePath } from "next/cache";
-import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { authorizeTourAccess } from "./access";
 import {
   presignPut,
   sceneSourceKey,
@@ -92,22 +92,16 @@ export async function requestSceneUpload(params: {
     return { ok: false, error: `File too large (${Math.round(size / 1024 / 1024)} MB). Max 50 MB.` };
   }
 
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) return { ok: false, error: access.error };
+  const teamId = access.teamId;
   const supabase = await createClient();
-
-  // Scope check — RLS would also catch this, but a clear error is friendlier.
-  const { data: tour, error: tourErr } = await supabase
-    .from("tours")
-    .select("id, team_id")
-    .eq("id", tourId)
-    .maybeSingle();
-  if (tourErr) return { ok: false, error: tourErr.message };
-  if (!tour) return { ok: false, error: "Tour not found." };
-  if (tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
 
   const sceneId = randomUUID();
   const ext = extFromContentType(contentType);
-  const key = sceneSourceKey(team.id, tourId, sceneId, ext);
+  // Key off the tour's own team (not the caller's) so admins editing other
+  // teams' tours store assets under that team's prefix.
+  const key = sceneSourceKey(teamId, tourId, sceneId, ext);
 
   // Compute the next order_index so scenes stack in the order they're uploaded.
   let orderIndex = params.orderIndex;
@@ -146,16 +140,17 @@ export async function completeSceneUpload(params: {
   sceneId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { tourId, sceneId } = params;
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) return { ok: false, error: access.error };
+  const teamId = access.teamId;
   const supabase = await createClient();
 
-  // Scope check (tour → team).
   const { data: tour } = await supabase
     .from("tours")
-    .select("id, team_id, cover_scene_id")
+    .select("id, cover_scene_id")
     .eq("id", tourId)
     .maybeSingle();
-  if (!tour || tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
+  if (!tour) return { ok: false, error: "Tour not found." };
 
   // Fetch the current scene row so we know the source key.
   const { data: scene } = await supabase
@@ -188,7 +183,7 @@ export async function completeSceneUpload(params: {
         .resize({ width: DISPLAY_MAX_WIDTH, withoutEnlargement: true })
         .jpeg({ quality: DISPLAY_JPEG_QUALITY, mozjpeg: true })
         .toBuffer();
-      const displayKey = sceneDisplayKey(team.id, tourId, sceneId);
+      const displayKey = sceneDisplayKey(teamId, tourId, sceneId);
       await putObjectBuffer(displayKey, resized, "image/jpeg");
       displayRef = `r2:${displayKey}`;
     } catch (err) {
@@ -228,15 +223,9 @@ export async function renameScene(params: {
   const trimmed = name.trim().slice(0, 80);
   if (!trimmed) return { ok: false, error: "Name can't be empty." };
 
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) return { ok: false, error: access.error };
   const supabase = await createClient();
-
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("id, team_id")
-    .eq("id", tourId)
-    .maybeSingle();
-  if (!tour || tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
 
   const { error } = await supabase
     .from("scenes")
@@ -262,15 +251,16 @@ export async function deleteScene(params: {
   sceneId: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { tourId, sceneId } = params;
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) return { ok: false, error: access.error };
   const supabase = await createClient();
 
   const { data: tour } = await supabase
     .from("tours")
-    .select("id, team_id, cover_scene_id")
+    .select("id, cover_scene_id")
     .eq("id", tourId)
     .maybeSingle();
-  if (!tour || tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
+  if (!tour) return { ok: false, error: "Tour not found." };
 
   // Pull the scene to learn its R2 key, then delete the row.
   const { data: scene } = await supabase
@@ -330,15 +320,9 @@ export async function abortSceneUpload(params: {
   key: string;
 }): Promise<{ ok: true } | { ok: false; error: string }> {
   const { tourId, sceneId, key } = params;
-  const { team } = await requireActiveTeam();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) return { ok: false, error: access.error };
   const supabase = await createClient();
-
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("id, team_id")
-    .eq("id", tourId)
-    .maybeSingle();
-  if (!tour || tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
 
   // Best-effort delete from R2; even if it fails, we still drop the DB row so
   // we don't leave an orphan pending scene in the editor.

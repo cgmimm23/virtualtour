@@ -1,9 +1,9 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { rowToTour, type TourWithRelations } from "@/lib/tour/db-mapper";
 import { resolveTourImageUrls } from "@/lib/r2/resolve";
+import { requireTourAccess } from "@/lib/tour/access";
 import { EditorTourExperience } from "./editor-tour-experience";
 
 interface PageProps {
@@ -14,7 +14,9 @@ export const metadata = { title: "Edit tour — Tourly" };
 
 export default async function EditTourPage({ params }: PageProps) {
   const { id } = await params;
-  const { team } = await requireActiveTeam(`/editor/${id}`);
+  // requireTourAccess gates on either team membership OR platform admin —
+  // matches the RLS policy in 0007 so admins can edit any tour.
+  await requireTourAccess(id);
 
   const supabase = await createClient();
   const { data, error } = await supabase
@@ -22,10 +24,11 @@ export default async function EditTourPage({ params }: PageProps) {
     // Disambiguate the embed: tours has two FKs touching scenes
     // (scenes.tour_id → tours.id, and tours.cover_scene_id → scenes.id).
     // The `!scenes_tour_id_fkey` hint tells PostgREST which relationship
-    // the embed means.
+    // the embed means. No team_id filter here — RLS already enforces
+    // membership-or-admin, and we don't want to lock admins out of
+    // other teams' tours.
     .select("*, scenes!scenes_tour_id_fkey(*, hotspots(*))")
     .eq("id", id)
-    .eq("team_id", team.id)
     .maybeSingle();
 
   if (error) throw new Error(error.message);
