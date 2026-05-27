@@ -15,25 +15,43 @@ export function isR2Ref(url: string | null | undefined): boolean {
   return typeof url === "string" && url.startsWith(R2_PREFIX);
 }
 
+/** Public R2.dev URL or custom CDN domain. Set when the bucket is public. */
+function publicBase(): string | null {
+  const raw = process.env.R2_PUBLIC_URL?.trim();
+  if (!raw) return null;
+  return raw.replace(/\/+$/, "");
+}
+
 /**
- * Reverse of resolveImageUrl: if a URL is a presigned R2 URL (browser may send
- * one back via saveTour since we resolved on the way out), strip the host
- * and signature and store the bare `r2:<key>` form. Non-R2 URLs are passed
- * through unchanged.
+ * Reverse of resolveImageUrl: if a URL is a presigned R2 URL or a public R2
+ * URL (browser may send one back via saveTour since we resolved on the way
+ * out), strip the host and store the bare `r2:<key>` form. Non-R2 URLs are
+ * passed through unchanged.
  */
 export function dehydrateImageUrl(url: string | null | undefined): string {
   if (!url) return "";
   if (isR2Ref(url)) return url;
   try {
     const parsed = new URL(url);
-    if (!parsed.hostname.endsWith(".r2.cloudflarestorage.com")) return url;
-    const bucket = process.env.R2_BUCKET_NAME ?? "";
-    // pathname is `/<bucket>/<key>` for path-style addressing.
-    const path = parsed.pathname.replace(/^\/+/, "");
-    if (bucket && path.startsWith(`${bucket}/`)) {
-      return `r2:${path.slice(bucket.length + 1)}`;
+    const pub = publicBase();
+    if (pub) {
+      const pubParsed = new URL(pub);
+      if (parsed.hostname === pubParsed.hostname) {
+        return `r2:${parsed.pathname.replace(/^\/+/, "")}`;
+      }
     }
-    return `r2:${path}`;
+    if (parsed.hostname.endsWith(".r2.dev")) {
+      return `r2:${parsed.pathname.replace(/^\/+/, "")}`;
+    }
+    if (parsed.hostname.endsWith(".r2.cloudflarestorage.com")) {
+      const bucket = process.env.R2_BUCKET_NAME ?? "";
+      const path = parsed.pathname.replace(/^\/+/, "");
+      if (bucket && path.startsWith(`${bucket}/`)) {
+        return `r2:${path.slice(bucket.length + 1)}`;
+      }
+      return `r2:${path}`;
+    }
+    return url;
   } catch {
     return url;
   }
@@ -46,7 +64,16 @@ function keyFromRef(url: string): string {
 export async function resolveImageUrl(url: string | null | undefined): Promise<string> {
   if (!url) return "";
   if (!isR2Ref(url)) return url;
-  return presignGet(keyFromRef(url));
+  const key = keyFromRef(url);
+  const pub = publicBase();
+  if (pub) {
+    // Public bucket — stable URL, browser-cacheable, no signature expiration.
+    // Encode each path segment so spaces / weird chars in filenames don't break.
+    const encoded = key.split("/").map(encodeURIComponent).join("/");
+    return `${pub}/${encoded}`;
+  }
+  // Fallback: presigned GET (works for private buckets).
+  return presignGet(key);
 }
 
 /** Walk a Tour, replacing any r2: refs on scenes / floor plan with signed URLs. */
