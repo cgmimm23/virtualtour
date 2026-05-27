@@ -12,6 +12,8 @@ import "server-only";
 import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
+export { PutObjectCommand, GetObjectCommand };
+
 const accountId = process.env.R2_ACCOUNT_ID;
 const accessKeyId = process.env.R2_ACCESS_KEY_ID;
 const secretAccessKey = process.env.R2_SECRET_ACCESS_KEY;
@@ -57,4 +59,30 @@ export function sceneSourceKey(teamId: string, tourId: string, sceneId: string, 
   // ext is the lowercased extension w/o the dot. Defended at the boundary.
   const safeExt = ext.toLowerCase().replace(/[^a-z0-9]/g, "") || "jpg";
   return `tours/${teamId}/${tourId}/scenes/${sceneId}/source.${safeExt}`;
+}
+
+/**
+ * Key for the WebGL-friendly version of the scene image (≤ 4096 wide).
+ * Original stays at `source.<ext>` so the future tile pipeline can re-process.
+ */
+export function sceneDisplayKey(teamId: string, tourId: string, sceneId: string): string {
+  return `tours/${teamId}/${tourId}/scenes/${sceneId}/display.jpg`;
+}
+
+/** Pull the bytes of an object into a Buffer. */
+export async function getObjectBuffer(key: string): Promise<Buffer> {
+  const res = await r2.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+  if (!res.Body) throw new Error(`R2 GET returned empty body for ${key}`);
+  // @aws-sdk/client-s3 returns a Web stream in Node; iterate it.
+  const chunks: Buffer[] = [];
+  // The Body is an async iterable in Node 18+.
+  for await (const chunk of res.Body as AsyncIterable<Uint8Array>) {
+    chunks.push(Buffer.from(chunk));
+  }
+  return Buffer.concat(chunks);
+}
+
+/** Upload a Buffer to R2 at the given key with the given content type. */
+export async function putObjectBuffer(key: string, body: Buffer, contentType: string): Promise<void> {
+  await r2.send(new PutObjectCommand({ Bucket: bucket, Key: key, Body: body, ContentType: contentType }));
 }

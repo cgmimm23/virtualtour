@@ -19,8 +19,23 @@
 import { revalidatePath } from "next/cache";
 import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
-import { presignPut, sceneSourceKey, deleteObject } from "@/lib/r2/client";
+import {
+  presignPut,
+  sceneSourceKey,
+  sceneDisplayKey,
+  deleteObject,
+  getObjectBuffer,
+  putObjectBuffer,
+} from "@/lib/r2/client";
+import sharp from "sharp";
 import { randomUUID } from "node:crypto";
+
+// WebGL MAX_TEXTURE_SIZE is 4096 on most phones and many laptops. Equirects
+// wider than this render as a black canvas. We resize on completion so the
+// browser always gets a GPU-safe image. Original stays in R2 at source.<ext>
+// for future re-processing (cube-face tiles).
+const DISPLAY_MAX_WIDTH = 4096;
+const DISPLAY_JPEG_QUALITY = 85;
 
 const ALLOWED_TYPES = new Set(["image/jpeg", "image/jpg", "image/png", "image/webp"]);
 const MAX_BYTES = 50 * 1024 * 1024; // 50 MB — Insta360 5.7K equirect is ~15-25 MB
@@ -142,10 +157,50 @@ export async function completeSceneUpload(params: {
     .maybeSingle();
   if (!tour || tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
 
-  // Mark ready. Tile pipeline lands later — for now equirect is served direct.
+  // Fetch the current scene row so we know the source key.
+  const { data: scene } = await supabase
+    .from("scenes")
+    .select("id, source_image_url")
+    .eq("id", sceneId)
+    .eq("tour_id", tourId)
+    .maybeSingle();
+  if (!scene) return { ok: false, error: "Scene not found." };
+
+  // Mark processing while we generate the WebGL-friendly version.
+  await supabase
+    .from("scenes")
+    .update({ processing_status: "processing" })
+    .eq("id", sceneId)
+    .eq("tour_id", tourId);
+
+  // Resize: cap width at DISPLAY_MAX_WIDTH so WebGL textures load on all GPUs.
+  // We only do this for r2:-stored uploads; legacy seed scenes (pointing at
+  // /public paths) are left alone.
+  const sourceUrl = scene.source_image_url;
+  const isR2 = typeof sourceUrl === "string" && sourceUrl.startsWith("r2:");
+  let displayRef = sourceUrl;
+  if (isR2) {
+    const sourceKey = sourceUrl.slice("r2:".length);
+    try {
+      const buf = await getObjectBuffer(sourceKey);
+      const resized = await sharp(buf)
+        .rotate() // honor EXIF orientation
+        .resize({ width: DISPLAY_MAX_WIDTH, withoutEnlargement: true })
+        .jpeg({ quality: DISPLAY_JPEG_QUALITY, mozjpeg: true })
+        .toBuffer();
+      const displayKey = sceneDisplayKey(team.id, tourId, sceneId);
+      await putObjectBuffer(displayKey, resized, "image/jpeg");
+      displayRef = `r2:${displayKey}`;
+    } catch (err) {
+      // Resize failed — fall back to serving the source directly. WebGL may
+      // still struggle, but a "won't render" is friendlier than a 500.
+      console.error("[completeSceneUpload] resize failed", err);
+    }
+  }
+
   const { error: updErr } = await supabase
     .from("scenes")
-    .update({ processing_status: "ready" })
+    .update({ processing_status: "ready", source_image_url: displayRef })
     .eq("id", sceneId)
     .eq("tour_id", tourId);
   if (updErr) return { ok: false, error: updErr.message };
