@@ -29,6 +29,7 @@ export function SceneStrip({ scenes, currentSceneId, onSelect }: SceneStripProps
           >
             <img
               src={s.imageUrl}
+              crossOrigin="anonymous"
               alt=""
               loading="lazy"
               className="h-12 w-20 object-cover"

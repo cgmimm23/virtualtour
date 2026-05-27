@@ -132,6 +132,7 @@ export function ManageScenesModal({
                         alt={s.name}
                         className="h-full w-full object-cover"
                         loading="lazy"
+                        crossOrigin="anonymous"
                       />
                       {isCover ? (
                         <span className="absolute left-2 top-2 inline-flex items-center gap-1 rounded-full bg-amber-500 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider text-white">

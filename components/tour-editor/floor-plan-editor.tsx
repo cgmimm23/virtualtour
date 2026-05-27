@@ -105,6 +105,7 @@ export function FloorPlanEditor({
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                   src={imageUrl}
+                  crossOrigin="anonymous"
                   alt="Floor plan"
                   className="max-h-[60vh] w-auto"
                   draggable={false}

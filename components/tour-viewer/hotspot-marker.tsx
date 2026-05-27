@@ -76,6 +76,7 @@ export function HotspotMarker({
           <span className="overflow-hidden rounded-lg border-2 border-white/80 bg-black/40 shadow-2xl backdrop-blur-md">
             <img
               src={targetScene.imageUrl}
+              crossOrigin="anonymous"
               alt=""
               className="block h-20 w-32 object-cover"
               loading="lazy"

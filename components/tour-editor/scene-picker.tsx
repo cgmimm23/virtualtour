@@ -119,6 +119,7 @@ export function ScenePicker({
         >
           <img
             src={s.imageUrl}
+            crossOrigin="anonymous"
             alt=""
             width={64}
             height={32}

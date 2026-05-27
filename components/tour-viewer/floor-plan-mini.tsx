@@ -37,6 +37,7 @@ export function FloorPlanMini({ imageUrl, scenes, currentSceneId, onSelect }: Fl
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={imageUrl}
+              crossOrigin="anonymous"
               alt="Floor plan"
               className="block max-h-[40vh] max-w-[40vw] min-w-[200px]"
               draggable={false}
