@@ -1,6 +1,7 @@
 "use server";
 
 import "server-only";
+import type Stripe from "stripe";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePlatformAdmin, getUser } from "@/lib/auth";
@@ -439,6 +440,118 @@ export async function startCheckout(input: { plan: string }) {
   });
 
   return { ok: true as const, url: session.url };
+}
+
+/**
+ * Switch an existing subscription to a different plan. For customers who
+ * already have a Stripe subscription, calling Checkout would create a SECOND
+ * subscription — double-charging them. This updates the existing one and
+ * lets Stripe prorate the difference.
+ *
+ * Webhook (customer.subscription.updated) updates teams.plan in our DB.
+ */
+export async function switchPlan(input: { plan: string }) {
+  const user = await getUser();
+  if (!user) return { ok: false as const, error: "not signed in" };
+
+  const parsed = StartCheckoutSchema.safeParse(input);
+  if (!parsed.success) return { ok: false as const, error: "invalid plan" };
+
+  const stripe = await getStripe();
+  if (!stripe) return { ok: false as const, error: "Stripe not configured yet" };
+
+  const supabase = createAdminClient();
+  const { data: membership } = await supabase
+    .from("team_members")
+    .select("team_id, role, team:teams(*)")
+    .eq("user_id", user.id)
+    .order("created_at", { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (!membership || !membership.team) return { ok: false as const, error: "no team" };
+  if (membership.role !== "owner" && membership.role !== "admin") {
+    return { ok: false as const, error: "only owners / admins can change the plan" };
+  }
+  const team = Array.isArray(membership.team) ? membership.team[0] : membership.team;
+  if (!team) return { ok: false as const, error: "no team" };
+  if (!team.stripe_subscription_id) {
+    return {
+      ok: false as const,
+      error: "no active subscription to switch — start a new checkout instead",
+    };
+  }
+
+  const priceKey: SecretKey =
+    parsed.data.plan === "solo"
+      ? "STRIPE_PRICE_ID_SOLO"
+      : parsed.data.plan === "team"
+        ? "STRIPE_PRICE_ID_TEAM"
+        : "STRIPE_PRICE_ID_BROKERAGE";
+  const { getSecret } = await import("@/lib/secrets");
+  const priceId = await getSecret(priceKey);
+  if (!priceId) {
+    return {
+      ok: false as const,
+      error: `${priceKey} not configured. Admin needs to provision Stripe products.`,
+    };
+  }
+
+  // Look up the current subscription item so we can swap its price.
+  let subscription: Stripe.Subscription;
+  try {
+    subscription = await stripe.subscriptions.retrieve(team.stripe_subscription_id);
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: `Couldn't load Stripe subscription: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  const item = subscription.items.data[0];
+  if (!item) {
+    return {
+      ok: false as const,
+      error: "Subscription has no items — something's off in Stripe.",
+    };
+  }
+  if (item.price.id === priceId) {
+    return { ok: false as const, error: "Already on this plan." };
+  }
+
+  try {
+    await stripe.subscriptions.update(team.stripe_subscription_id, {
+      items: [{ id: item.id, price: priceId }],
+      proration_behavior: "create_prorations",
+      metadata: { team_id: team.id, plan: parsed.data.plan },
+    });
+  } catch (err) {
+    return {
+      ok: false as const,
+      error: `Stripe rejected the switch: ${err instanceof Error ? err.message : String(err)}`,
+    };
+  }
+
+  // Webhook will update teams.plan + stripe_status when Stripe fires
+  // customer.subscription.updated. We optimistically write the plan field
+  // too so the UI reflects the change immediately without waiting for the
+  // webhook round-trip.
+  await supabase
+    .from("teams")
+    .update({ plan: parsed.data.plan })
+    .eq("id", team.id);
+  await supabase.from("billing_events").insert({
+    team_id: team.id,
+    type: "plan_switched",
+    source: "self_serve",
+    actor_user_id: user.id,
+    from_plan: team.plan,
+    to_plan: parsed.data.plan,
+    stripe_object_id: subscription.id,
+    metadata: { proration: "create_prorations" },
+  });
+
+  revalidatePath("/dashboard/billing");
+  return { ok: true as const };
 }
 
 export async function openCustomerPortal() {

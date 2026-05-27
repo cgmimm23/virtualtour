@@ -50,7 +50,11 @@ export default async function DashboardBilling({
 
       <AutoCheckout />
 
-      {sp.ok ? (
+      {sp.ok === "switched" ? (
+        <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
+          ✓ Plan switched. Stripe will prorate your next invoice for the difference.
+        </div>
+      ) : sp.ok ? (
         <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">
           ✓ Subscription updated. Changes take effect immediately; the next invoice reflects the
           new plan.
@@ -105,6 +109,7 @@ export default async function DashboardBilling({
               <BillingPlanGrid
                 currentPlan={team.plan}
                 hasCustomer={Boolean(team.stripe_customer_id)}
+                hasSubscription={Boolean(team.stripe_subscription_id)}
                 tiers={tiers}
               />
             )}

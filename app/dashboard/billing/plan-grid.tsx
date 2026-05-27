@@ -1,18 +1,22 @@
 "use client";
 
-import { useTransition } from "react";
-import { startCheckout, openCustomerPortal } from "@/lib/stripe/billing-actions";
+import { useState, useTransition } from "react";
+import { useRouter } from "next/navigation";
+import { startCheckout, switchPlan, openCustomerPortal } from "@/lib/stripe/billing-actions";
 import type { PricingTier } from "@/lib/pricing";
 
 export function BillingPlanGrid({
   currentPlan,
   hasCustomer,
+  hasSubscription,
   tiers,
 }: {
   currentPlan: string;
   hasCustomer: boolean;
+  hasSubscription: boolean;
   tiers: PricingTier[];
 }) {
+  const router = useRouter();
   const PLANS = tiers.map((t) => ({
     value: t.plan,
     label: t.displayName,
@@ -21,31 +25,77 @@ export function BillingPlanGrid({
     highlight: t.highlight,
   }));
   const [pending, startTransition] = useTransition();
+  const [busyPlan, setBusyPlan] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
-  const onUpgrade = (plan: "solo" | "team" | "brokerage") => {
+  const onPickPlan = (plan: "solo" | "team" | "brokerage", label: string) => {
+    setError(null);
+
+    // Already-paying customer → modify subscription in place. Otherwise →
+    // first-time checkout. Doing both via Checkout would create a second
+    // subscription on top of the first and double-charge the customer.
+    if (hasSubscription) {
+      if (!window.confirm(`Switch to ${label}? Stripe will prorate the difference on your next invoice.`)) {
+        return;
+      }
+      setBusyPlan(plan);
+      startTransition(async () => {
+        const r = await switchPlan({ plan });
+        setBusyPlan(null);
+        if (r.ok) {
+          router.push("/dashboard/billing?ok=switched");
+          router.refresh();
+        } else {
+          setError(r.error);
+        }
+      });
+      return;
+    }
+
+    setBusyPlan(plan);
     startTransition(async () => {
       const r = await startCheckout({ plan });
+      setBusyPlan(null);
       if (r.ok && r.url) {
         window.location.href = r.url;
       } else {
-        alert(`Couldn't start checkout: ${r.ok ? "" : r.error}`);
+        setError(r.ok ? "Checkout returned no URL." : r.error);
       }
     });
   };
 
   const onManage = () => {
+    setError(null);
     startTransition(async () => {
       const r = await openCustomerPortal();
       if (r.ok && r.url) {
         window.location.href = r.url;
       } else {
-        alert(`Couldn't open portal: ${r.ok ? "" : r.error}`);
+        setError(r.ok ? "Portal returned no URL." : r.error);
       }
     });
   };
 
+  const ctaLabel = (planValue: string, label: string, isCurrent: boolean) => {
+    if (isCurrent) return "Current plan";
+    if (busyPlan === planValue) return "…";
+    if (!hasSubscription) return `Upgrade to ${label}`;
+    // Determine direction relative to current plan.
+    const order = ["trial", "solo", "team", "brokerage"];
+    const fromIdx = order.indexOf(currentPlan);
+    const toIdx = order.indexOf(planValue);
+    if (fromIdx < 0 || toIdx < 0) return `Switch to ${label}`;
+    return toIdx > fromIdx ? `Upgrade to ${label}` : `Downgrade to ${label}`;
+  };
+
   return (
     <div>
+      {error ? (
+        <div className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {error}
+        </div>
+      ) : null}
+
       <div className="grid gap-3 md:grid-cols-3">
         {PLANS.map((p) => {
           const isCurrent = currentPlan === p.value;
@@ -80,14 +130,14 @@ export function BillingPlanGrid({
               <button
                 type="button"
                 disabled={pending || isCurrent}
-                onClick={() => onUpgrade(p.value)}
+                onClick={() => onPickPlan(p.value as "solo" | "team" | "brokerage", p.label)}
                 className={`mt-3 w-full rounded-md px-3 py-1.5 text-xs font-semibold ${
                   isCurrent
                     ? "bg-neutral-100 text-neutral-400"
                     : "bg-brand-600 text-white hover:bg-brand-700"
                 } disabled:opacity-40`}
               >
-                {isCurrent ? "Current plan" : pending ? "…" : `Upgrade to ${p.label}`}
+                {ctaLabel(p.value, p.label, isCurrent)}
               </button>
             </div>
           );
