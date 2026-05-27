@@ -1,13 +1,24 @@
 import Link from "next/link";
 import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { CreateTourButton } from "./create-tour-button";
 
 export const metadata = { title: "Tours — Tourly" };
 
-export default async function DashboardPage() {
+interface PageProps {
+  searchParams: Promise<{
+    upgrade?: string;
+    current?: string;
+    limit?: string;
+    plan?: string;
+  }>;
+}
+
+export default async function DashboardPage({ searchParams }: PageProps) {
   const { team } = await requireActiveTeam();
   const supabase = await createClient();
+  const sp = await searchParams;
 
   // RLS enforces team_id; we still pass the filter to keep the index hot.
   const { data: tours } = await supabase
@@ -17,17 +28,62 @@ export default async function DashboardPage() {
     .order("updated_at", { ascending: false });
 
   const list = tours ?? [];
+  const limit = PLAN_LIMITS[team.plan].tours;
+  const atLimit = limit !== Number.POSITIVE_INFINITY && list.length >= limit;
+  const usageLabel =
+    limit === Number.POSITIVE_INFINITY
+      ? `${list.length} ${list.length === 1 ? "tour" : "tours"}`
+      : `${list.length} / ${limit} ${list.length === 1 ? "tour" : "tours"}`;
+  const planLabel = team.plan.charAt(0).toUpperCase() + team.plan.slice(1);
 
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
+      {sp.upgrade === "tours" ? (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
+          <div>
+            <strong>You&apos;ve hit your {sp.plan ?? team.plan} plan limit</strong>
+            {sp.current && sp.limit ? (
+              <> — {sp.current} / {sp.limit} tours used.</>
+            ) : null}{" "}
+            Upgrade to add more.
+          </div>
+          <Link
+            href="/dashboard/billing"
+            className="rounded-md bg-amber-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-700"
+          >
+            See plans →
+          </Link>
+        </div>
+      ) : null}
+
       <div className="mb-6 flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-semibold">Your tours</h1>
           <p className="text-sm text-neutral-500">
-            {list.length} {list.length === 1 ? "tour" : "tours"} in {team.name}.
+            {usageLabel} on {planLabel} plan
+            {atLimit ? (
+              <>
+                {" · "}
+                <Link
+                  href="/dashboard/billing"
+                  className="font-medium text-brand-700 hover:text-brand-800"
+                >
+                  Upgrade →
+                </Link>
+              </>
+            ) : null}
           </p>
         </div>
-        <CreateTourButton />
+        {atLimit ? (
+          <Link
+            href="/dashboard/billing"
+            className="rounded-md bg-brand-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            Upgrade plan
+          </Link>
+        ) : (
+          <CreateTourButton />
+        )}
       </div>
 
       {list.length === 0 ? (

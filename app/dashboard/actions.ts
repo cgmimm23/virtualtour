@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireActiveTeam } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
+import { checkTourQuota } from "@/lib/plan-limits";
 
 function slugify(input: string): string {
   return input
@@ -33,6 +34,13 @@ async function uniqueSlug(base: string): Promise<string> {
 
 export async function createTourAction(formData: FormData): Promise<void> {
   const { team } = await requireActiveTeam();
+  const quota = await checkTourQuota(team.id, team.plan);
+  if (!quota.ok) {
+    // Bounce back to dashboard with a query flag the page surfaces as a banner
+    // + upgrade CTA. Throwing here would land on a 500 which is the wrong UX.
+    redirect(`/dashboard?upgrade=tours&current=${quota.current}&limit=${quota.limit}&plan=${quota.plan}`);
+  }
+
   const title = String(formData.get("title") ?? "").trim() || "Untitled tour";
   const address = String(formData.get("propertyAddress") ?? "").trim() || null;
 
