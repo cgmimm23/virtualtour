@@ -17,7 +17,8 @@ export async function loadTour(tourId: string): Promise<Tour | null> {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tours")
-    .select("*, scenes(*, hotspots(*))")
+    // Disambiguate the embed — see app/editor/[id]/page.tsx for the why.
+    .select("*, scenes!scenes_tour_id_fkey(*, hotspots(*))")
     .eq("id", tourId)
     .maybeSingle();
 

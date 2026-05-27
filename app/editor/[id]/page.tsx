@@ -19,7 +19,11 @@ export default async function EditTourPage({ params }: PageProps) {
   const supabase = await createClient();
   const { data, error } = await supabase
     .from("tours")
-    .select("*, scenes(*, hotspots(*))")
+    // Disambiguate the embed: tours has two FKs touching scenes
+    // (scenes.tour_id → tours.id, and tours.cover_scene_id → scenes.id).
+    // The `!scenes_tour_id_fkey` hint tells PostgREST which relationship
+    // the embed means.
+    .select("*, scenes!scenes_tour_id_fkey(*, hotspots(*))")
     .eq("id", id)
     .eq("team_id", team.id)
     .maybeSingle();
