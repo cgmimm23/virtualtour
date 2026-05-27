@@ -9,10 +9,11 @@
 // without one. The uploader creates scene rows + uploads to R2, then refreshes
 // the page so this component re-mounts with scenes in hand.
 //
-// When the tour already has scenes, we render TourExperience plus two
+// When the tour already has scenes, we render TourExperience plus three
 // floating actions:
-//   - "+ Add scenes" — opens the upload modal for more 360 photos.
 //   - "Share" — toggle publish/unpublish + copy the public /t/[slug] URL.
+//   - "Scenes" — open a grid view of every scene with inline rename.
+//   - "+ Add scenes" — open the upload modal for more 360 photos.
 
 import { useCallback, useState } from "react";
 import Link from "next/link";
@@ -20,6 +21,7 @@ import { TourExperience } from "@/components/tour-editor/tour-experience";
 import { SceneUploader } from "@/components/tour-editor/scene-uploader";
 import { SceneUploaderModal } from "@/components/tour-editor/scene-uploader-modal";
 import { ShareModal } from "@/components/tour-editor/share-modal";
+import { ManageScenesModal } from "@/components/tour-editor/manage-scenes-modal";
 import { saveTour } from "@/lib/tour/actions";
 import { listLeadsForTour } from "@/lib/tour/lead-actions";
 import type { Tour } from "@/lib/tour/types";
@@ -33,6 +35,7 @@ interface EditorTourExperienceProps {
 export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTourExperienceProps) {
   const [uploaderOpen, setUploaderOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
+  const [manageOpen, setManageOpen] = useState(false);
 
   const onSaveTour = useCallback(
     async (next: Tour) => {
@@ -109,6 +112,20 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
         </button>
         <button
           type="button"
+          onClick={() => setManageOpen(true)}
+          className="flex items-center gap-2 rounded-full bg-white px-4 py-2 text-sm font-medium text-neutral-900 shadow-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:ring-offset-2 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+          title="View all scenes and rename them"
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="3" width="7" height="7" />
+            <rect x="14" y="3" width="7" height="7" />
+            <rect x="3" y="14" width="7" height="7" />
+            <rect x="14" y="14" width="7" height="7" />
+          </svg>
+          Scenes ({tour.scenes.length})
+        </button>
+        <button
+          type="button"
           onClick={() => setUploaderOpen(true)}
           className="flex items-center gap-2 rounded-full bg-brand-600 px-4 py-2 text-sm font-medium text-white shadow-lg hover:bg-brand-700 focus:outline-none focus:ring-2 focus:ring-brand-500 focus:ring-offset-2"
           title="Upload more 360° photos"
@@ -130,6 +147,13 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
         initialStatus={initialStatus}
         open={shareOpen}
         onClose={() => setShareOpen(false)}
+      />
+      <ManageScenesModal
+        tourId={tourId}
+        scenes={tour.scenes}
+        coverSceneId={tour.coverSceneId}
+        open={manageOpen}
+        onClose={() => setManageOpen(false)}
       />
     </>
   );

@@ -215,6 +215,41 @@ export async function completeSceneUpload(params: {
 }
 
 /**
+ * Rename a scene. Direct DB write — bypasses the TourExperience auto-save
+ * flow, so the next page render will reconcile. Used by the Manage scenes
+ * modal where the user is editing names away from the viewer state.
+ */
+export async function renameScene(params: {
+  tourId: string;
+  sceneId: string;
+  name: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { tourId, sceneId, name } = params;
+  const trimmed = name.trim().slice(0, 80);
+  if (!trimmed) return { ok: false, error: "Name can't be empty." };
+
+  const { team } = await requireActiveTeam();
+  const supabase = await createClient();
+
+  const { data: tour } = await supabase
+    .from("tours")
+    .select("id, team_id")
+    .eq("id", tourId)
+    .maybeSingle();
+  if (!tour || tour.team_id !== team.id) return { ok: false, error: "Forbidden." };
+
+  const { error } = await supabase
+    .from("scenes")
+    .update({ name: trimmed })
+    .eq("id", sceneId)
+    .eq("tour_id", tourId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/editor/${tourId}`);
+  return { ok: true };
+}
+
+/**
  * Permanently delete a scene: the DB row (which cascades to hotspots) AND
  * the underlying R2 objects (source.<ext> + display.jpg if present).
  *
