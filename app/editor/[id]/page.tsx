@@ -43,7 +43,11 @@ export default async function EditTourPage({ params }: PageProps) {
         </div>
       }
     >
-      <EditorTourExperience tour={tour} tourId={id} />
+      <EditorTourExperience
+        tour={tour}
+        tourId={id}
+        initialStatus={(data as { status?: "draft" | "published" }).status ?? "draft"}
+      />
     </Suspense>
   );
 }

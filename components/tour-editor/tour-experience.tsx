@@ -1317,22 +1317,35 @@ export function TourExperience({
 
             {canEdit ? (
               <span
-                className={`mr-1 hidden text-xs sm:inline ${
+                className={`mr-1 inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-xs font-medium ${
                   saveStatus === "error"
-                    ? "text-red-600"
+                    ? "bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300"
                     : saveStatus === "saving"
-                      ? "text-neutral-500"
-                      : "text-neutral-400"
+                      ? "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300"
+                      : saveStatus === "saved"
+                        ? "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300"
+                        : "text-neutral-400"
                 }`}
-                title={saveError ?? undefined}
+                title={saveError ?? "Edits auto-save as you go"}
               >
+                <span
+                  className={`inline-block h-1.5 w-1.5 rounded-full ${
+                    saveStatus === "error"
+                      ? "bg-red-500"
+                      : saveStatus === "saving"
+                        ? "animate-pulse bg-amber-500"
+                        : saveStatus === "saved"
+                          ? "bg-emerald-500"
+                          : "bg-neutral-300 dark:bg-neutral-600"
+                  }`}
+                />
                 {saveStatus === "saving"
                   ? "Saving…"
                   : saveStatus === "saved"
                     ? "Saved"
                     : saveStatus === "error"
                       ? "Save failed"
-                      : ""}
+                      : "Auto-saves"}
               </span>
             ) : null}
             {canEdit ? (
