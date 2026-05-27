@@ -124,6 +124,44 @@ export async function saveTour(tour: Tour): Promise<{ ok: true } | { ok: false; 
   return { ok: true };
 }
 
+// updateTourMeta --------------------------------------------------------
+//
+// Lightweight rename for the tour title + property address. Direct DB write
+// that skips the full saveTour replace-all path — used by the Tour info
+// modal where the user is only touching metadata and we don't want to
+// reconcile with the in-memory editor state.
+
+export async function updateTourMeta(params: {
+  tourId: string;
+  title: string;
+  propertyAddress: string;
+}): Promise<{ ok: true } | { ok: false; error: string }> {
+  const { tourId } = params;
+  const title = params.title.trim().slice(0, 120);
+  const propertyAddress = params.propertyAddress.trim().slice(0, 240) || null;
+  if (!title) return { ok: false, error: "Title can't be empty." };
+
+  const { team } = await requireActiveTeam();
+  const supabase = await createClient();
+
+  const { data: existing } = await supabase
+    .from("tours")
+    .select("id, team_id")
+    .eq("id", tourId)
+    .maybeSingle();
+  if (!existing || existing.team_id !== team.id) return { ok: false, error: "Forbidden." };
+
+  const { error } = await supabase
+    .from("tours")
+    .update({ title, property_address: propertyAddress })
+    .eq("id", tourId);
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath(`/editor/${tourId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
+}
+
 // publishTour / unpublishTour -------------------------------------------
 
 export async function setTourStatus(

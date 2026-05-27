@@ -22,6 +22,7 @@ import { SceneUploader } from "@/components/tour-editor/scene-uploader";
 import { SceneUploaderModal } from "@/components/tour-editor/scene-uploader-modal";
 import { ShareModal } from "@/components/tour-editor/share-modal";
 import { ManageScenesModal } from "@/components/tour-editor/manage-scenes-modal";
+import { TourInfoModal } from "@/components/tour-editor/tour-info-modal";
 import { saveTour } from "@/lib/tour/actions";
 import { listLeadsForTour } from "@/lib/tour/lead-actions";
 import type { Tour } from "@/lib/tour/types";
@@ -36,6 +37,7 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
   const [uploaderOpen, setUploaderOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [manageOpen, setManageOpen] = useState(false);
+  const [infoOpen, setInfoOpen] = useState(false);
 
   const onSaveTour = useCallback(
     async (next: Tour) => {
@@ -90,6 +92,30 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
         onSaveTour={onSaveTour}
         onLoadLeads={onLoadLeads}
       />
+      <div className="fixed left-5 top-5 z-40 flex items-center gap-2">
+        <Link
+          href="/dashboard"
+          className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 shadow-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+          title="Back to dashboard"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="15 18 9 12 15 6" />
+          </svg>
+          Tours
+        </Link>
+        <button
+          type="button"
+          onClick={() => setInfoOpen(true)}
+          className="flex max-w-[24rem] items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm shadow-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          title="Rename tour / edit address"
+        >
+          <span className="min-w-0 truncate font-medium">{tour.title}</span>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="shrink-0 text-neutral-400">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z" />
+          </svg>
+        </button>
+      </div>
       <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
         <button
           type="button"
@@ -154,6 +180,13 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
         coverSceneId={tour.coverSceneId}
         open={manageOpen}
         onClose={() => setManageOpen(false)}
+      />
+      <TourInfoModal
+        tourId={tourId}
+        initialTitle={tour.title}
+        initialAddress={tour.propertyAddress}
+        open={infoOpen}
+        onClose={() => setInfoOpen(false)}
       />
     </>
   );
