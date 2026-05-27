@@ -47,6 +47,7 @@ const FAQS = [
 
 export default async function PricingPage() {
   const TIERS = (await getPricingTiers()).map((t) => ({
+    plan: t.plan,
     name: t.displayName,
     price: t.priceCents / 100,
     blurb: t.blurb,
@@ -95,7 +96,7 @@ export default async function PricingPage() {
                   <span className="text-sm text-neutral-500">/mo</span>
                 </div>
                 <Link
-                  href="/signup"
+                  href={`/signup?plan=${t.plan}`}
                   className={`mt-6 block rounded-lg px-4 py-2.5 text-center text-sm font-semibold ${
                     t.highlight
                       ? "bg-accent-500 text-white hover:bg-amber-300"

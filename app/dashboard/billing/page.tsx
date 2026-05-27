@@ -4,13 +4,14 @@ import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getPricingTiers, getPricingTierByPlan } from "@/lib/pricing";
 import { BillingPlanGrid } from "./plan-grid";
+import { AutoCheckout } from "./auto-checkout";
 
 export const dynamic = "force-dynamic";
 
 export default async function DashboardBilling({
   searchParams,
 }: {
-  searchParams: Promise<{ ok?: string; cancelled?: string }>;
+  searchParams: Promise<{ ok?: string; cancelled?: string; checkout?: string }>;
 }) {
   const { team, role } = await requireActiveTeam("/dashboard/billing");
   const sp = await searchParams;
@@ -46,6 +47,8 @@ export default async function DashboardBilling({
         <h1 className="mt-1 text-2xl font-semibold tracking-tight">Billing</h1>
         <p className="text-sm text-neutral-500">Manage your subscription and payment method.</p>
       </div>
+
+      <AutoCheckout />
 
       {sp.ok ? (
         <div className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-sm text-emerald-800">

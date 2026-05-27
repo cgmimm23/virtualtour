@@ -6,11 +6,12 @@ import type { AuthFormState } from "../login/actions";
 
 const initial: AuthFormState = {};
 
-export function SignupForm() {
+export function SignupForm({ plan }: { plan?: string }) {
   const [state, formAction, pending] = useActionState(signupAction, initial);
 
   return (
     <form action={formAction} className="space-y-4">
+      {plan ? <input type="hidden" name="plan" value={plan} /> : null}
       <div>
         <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-neutral-500">
           Work email
