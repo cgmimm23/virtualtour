@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { requireActiveTeam } from "@/lib/auth";
+import { notifyAgentOfLead } from "@/lib/email/lead-captured";
 import type { Lead } from "./types";
 import type { LeadSource, Database } from "@/types/supabase";
 
@@ -45,6 +46,26 @@ export async function submitPublicLead(
   });
 
   if (error) return { ok: false, error: error.message };
+
+  // Fire the agent notification email out-of-band — we don't want a Resend
+  // hiccup to fail the lead submission. notifyAgentOfLead swallows its own
+  // errors but we still try/catch for paranoia.
+  try {
+    await notifyAgentOfLead({
+      leadId: data as unknown as string,
+      tourSlug: input.tourSlug,
+      email: input.email.trim(),
+      name: input.name?.trim() ?? null,
+      phone: input.phone?.trim() ?? null,
+      preferredTime: input.preferredTime ?? null,
+      source: input.source,
+      scenesViewed: input.scenesViewed,
+      durationMs: input.durationMs,
+    });
+  } catch (err) {
+    console.error("[submitPublicLead] notify failed:", err);
+  }
+
   return { ok: true, id: data as unknown as string };
 }
 
