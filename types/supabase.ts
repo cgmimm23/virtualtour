@@ -376,6 +376,34 @@ export interface Database {
         Update: Partial<Database["public"]["Tables"]["platform_admins"]["Insert"]>;
         Relationships: [];
       };
+      team_invites: {
+        Row: {
+          id: string;
+          team_id: string;
+          email: string;
+          role: TeamRole;
+          token: string;
+          invited_by: string | null;
+          created_at: string;
+          expires_at: string;
+          accepted_at: string | null;
+          accepted_by: string | null;
+        };
+        Insert: {
+          id?: string;
+          team_id: string;
+          email: string;
+          role?: TeamRole;
+          token: string;
+          invited_by?: string | null;
+          created_at?: string;
+          expires_at?: string;
+          accepted_at?: string | null;
+          accepted_by?: string | null;
+        };
+        Update: Partial<Database["public"]["Tables"]["team_invites"]["Insert"]>;
+        Relationships: [];
+      };
     };
     Views: Record<string, never>;
     Functions: {
@@ -386,6 +414,10 @@ export interface Database {
       is_platform_admin: {
         Args: Record<string, never>;
         Returns: boolean;
+      };
+      accept_team_invite: {
+        Args: { p_token: string };
+        Returns: unknown;
       };
       submit_public_lead: {
         Args: {
