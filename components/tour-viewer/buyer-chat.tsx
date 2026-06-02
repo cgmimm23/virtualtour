@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { readableTextOn } from "@/lib/branding/contrast";
 
 interface BuyerChatProps {
   tourSlug: string;
@@ -25,6 +26,7 @@ function newSessionId(): string {
 
 export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: BuyerChatProps) {
   const accent = primaryColor ?? "#205081";
+  const accentText = readableTextOn(accent);
   const [open, setOpen] = useState(false);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
@@ -143,8 +145,8 @@ export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: 
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="pointer-events-auto flex h-12 items-center gap-2 rounded-full px-4 text-sm font-semibold text-white shadow-2xl transition-transform hover:scale-105"
-        style={{ background: accent }}
+        className="pointer-events-auto flex h-12 items-center gap-2 rounded-full px-4 text-sm font-semibold shadow-2xl transition-transform hover:scale-105"
+        style={{ background: accent, color: accentText }}
         aria-label="Open AI chat about this property"
       >
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -159,7 +161,7 @@ export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: 
     <div className="pointer-events-auto flex h-[70vh] max-h-[600px] w-[92vw] max-w-sm flex-col overflow-hidden rounded-2xl border border-white/15 bg-white shadow-2xl">
       <header
         className="flex items-center justify-between gap-2 border-b border-neutral-200 px-4 py-3"
-        style={{ background: accent, color: "white" }}
+        style={{ background: accent, color: accentText }}
       >
         <div className="flex min-w-0 items-center gap-2">
           {agentPhotoUrl ? (
@@ -240,8 +242,8 @@ export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: 
             />
             <button
               type="submit"
-              className="rounded-md px-3 py-1.5 text-sm font-semibold text-white"
-              style={{ background: accent }}
+              className="rounded-md px-3 py-1.5 text-sm font-semibold"
+              style={{ background: accent, color: accentText }}
             >
               Send
             </button>
@@ -274,8 +276,8 @@ export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: 
         <button
           type="submit"
           disabled={pending || !input.trim()}
-          className="flex h-9 w-9 items-center justify-center rounded-full text-white disabled:opacity-40"
-          style={{ background: accent }}
+          className="flex h-9 w-9 items-center justify-center rounded-full disabled:opacity-40"
+          style={{ background: accent, color: accentText }}
           aria-label="Send"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">

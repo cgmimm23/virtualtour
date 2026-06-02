@@ -1,6 +1,7 @@
 "use client";
 
 import type { BrandingConfig } from "@/lib/tour/types";
+import { readableTextOn } from "@/lib/branding/contrast";
 
 interface AgentCardProps {
   branding: BrandingConfig;
@@ -21,6 +22,7 @@ export function AgentCard({ branding, variant = "compact", onContact }: AgentCar
     .toUpperCase();
 
   const accent = primaryColor ?? "#205081";
+  const accentText = readableTextOn(accent);
 
   return (
     <div
@@ -32,7 +34,7 @@ export function AgentCard({ branding, variant = "compact", onContact }: AgentCar
     >
       <div
         className={`flex flex-shrink-0 items-center justify-center overflow-hidden rounded-full ${variant === "full" ? "h-12 w-12 text-base" : "h-8 w-8 text-xs"} font-semibold`}
-        style={{ background: accent }}
+        style={{ background: accent, color: accentText }}
       >
         {agentPhotoUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
@@ -69,7 +71,7 @@ export function AgentCard({ branding, variant = "compact", onContact }: AgentCar
               type="button"
               onClick={onContact}
               className="rounded-md px-3 py-1.5 text-xs font-medium"
-              style={{ background: accent }}
+              style={{ background: accent, color: accentText }}
             >
               Contact
             </button>
@@ -77,7 +79,7 @@ export function AgentCard({ branding, variant = "compact", onContact }: AgentCar
             <a
               href={`mailto:${agentEmail}`}
               className="rounded-md px-3 py-1.5 text-xs font-medium"
-              style={{ background: accent }}
+              style={{ background: accent, color: accentText }}
             >
               Contact
             </a>
