@@ -122,21 +122,24 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
         <button
           type="button"
           onClick={() => setShareOpen(true)}
-          className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-medium shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
+          className={`flex items-center gap-2 rounded-full px-4 py-2 text-sm font-semibold shadow-lg focus:outline-none focus:ring-2 focus:ring-offset-2 ${
             isPublished
               ? "bg-emerald-600 text-white hover:bg-emerald-700 focus:ring-emerald-500"
-              : "bg-white text-neutral-900 hover:bg-neutral-100 focus:ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
+              : "bg-brand-600 text-white hover:bg-brand-700 focus:ring-brand-500"
           }`}
-          title="Publish & share this tour"
+          title={isPublished ? "Tour is live — copy the share link" : "Publish this tour so the share link works"}
         >
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="18" cy="5" r="3" />
-            <circle cx="6" cy="12" r="3" />
-            <circle cx="18" cy="19" r="3" />
-            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
-            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
-          </svg>
-          {isPublished ? "Live · Share" : "Share"}
+          {isPublished ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="20 6 9 17 4 12" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 19V5" />
+              <polyline points="5 12 12 5 19 12" />
+            </svg>
+          )}
+          {isPublished ? "Live · Share" : "Publish"}
         </button>
         <button
           type="button"
