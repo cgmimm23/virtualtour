@@ -656,13 +656,29 @@ export function TourExperience({
     return () => window.removeEventListener("keydown", onKey);
   }, [editMode, goToPrev, goToNext, handleTogglePlay, isPlaying]);
 
-  // Stop auto-play when entering edit mode.
+  // Stop auto-play whenever edit mode is on. Unconditional kill (not gated
+  // on the current isPlaying value) so any path that flips isPlaying back
+  // on — direct state writes, batched updates, leftover effects — gets
+  // immediately reversed. The play UI is hidden in edit mode anyway, so
+  // we never need a "playing" state alongside editing.
   useEffect(() => {
-    if (editMode && isPlaying) {
+    if (editMode) {
       setIsPlaying(false);
       setIsPlayingHighlights(false);
     }
-  }, [editMode, isPlaying]);
+  }, [editMode]);
+
+  // Belt-and-suspenders: also reset on every render that has editMode true
+  // AND a stale truthy playback state. This catches the (theoretical) case
+  // where a state setter slipped past the useEffect kill — most likely cause
+  // is a hot-reloaded module with stale closures during dev.
+  if (editMode && (isPlaying || isPlayingHighlights)) {
+    // Schedule for the next tick — we can't setState during render.
+    queueMicrotask(() => {
+      setIsPlaying(false);
+      setIsPlayingHighlights(false);
+    });
+  }
 
   const handleSetHighlights = useCallback(
     (next: string[]) => {
