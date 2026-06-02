@@ -82,10 +82,12 @@ export function TourViewer({
       });
       viewerRef.current = viewer;
 
-      // Bump the FOV limit so the mobile widen-on-load below has headroom.
+      // Maximum FOV limit pushed up so the mobile widen-on-load has
+      // headroom. 150° is near the practical limit for rectilinear
+      // projection before edges shear unrecognizably.
       const limiter = Marzipano.RectilinearView.limit.traditional(
         4096,
-        (140 * Math.PI) / 180,
+        (150 * Math.PI) / 180,
       );
       const geometry = new Marzipano.EquirectGeometry([{ width: 4096 }]);
 
@@ -96,10 +98,12 @@ export function TourViewer({
       const w = typeof window !== "undefined" ? window.innerWidth : 1024;
       const mobileFov =
         w < 480
-          ? (130 * Math.PI) / 180 // narrow phones — go widest
+          ? (145 * Math.PI) / 180 // narrow phones — open near the FOV ceiling
           : w < 768
-            ? (120 * Math.PI) / 180 // large phones / portrait tablets
-            : 0; // desktop — respect saved FOV
+            ? (135 * Math.PI) / 180 // large phones / portrait tablets
+            : w < 1024
+              ? (115 * Math.PI) / 180 // landscape phones / portrait iPad
+              : 0; // desktop — respect saved FOV
 
       const map = new Map<string, MScene>();
       for (const s of scenes) {
