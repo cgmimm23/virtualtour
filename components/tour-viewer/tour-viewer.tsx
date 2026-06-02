@@ -98,11 +98,11 @@ export function TourViewer({
       const w = typeof window !== "undefined" ? window.innerWidth : 1024;
       const mobileFov =
         w < 480
-          ? (145 * Math.PI) / 180 // narrow phones — open near the FOV ceiling
+          ? (125 * Math.PI) / 180 // narrow phones — natural-feeling wide angle
           : w < 768
-            ? (135 * Math.PI) / 180 // large phones / portrait tablets
+            ? (115 * Math.PI) / 180 // large phones / portrait tablets
             : w < 1024
-              ? (115 * Math.PI) / 180 // landscape phones / portrait iPad
+              ? (105 * Math.PI) / 180 // landscape phones / portrait iPad
               : 0; // desktop — respect saved FOV
 
       const map = new Map<string, MScene>();
