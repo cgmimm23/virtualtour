@@ -5,13 +5,30 @@ import { readableTextOn } from "@/lib/branding/contrast";
 
 interface AgentCardProps {
   branding: BrandingConfig;
-  variant?: "compact" | "full";
+  variant?: "compact" | "full" | "responsive";
   onContact?: () => void;
 }
 
 export function AgentCard({ branding, variant = "compact", onContact }: AgentCardProps) {
   const { agentName, agentPhotoUrl, agentPhone, agentEmail, brokerageName, primaryColor } = branding;
   if (!agentName && !brokerageName) return null;
+
+  // Responsive variant: compact on phone (just photo + name pill, tap to
+  // open contact gate), full on desktop. Reduces the chrome footprint
+  // on the public viewer where the variant="full" card was eating ~280px
+  // of the top-right on phones.
+  if (variant === "responsive") {
+    return (
+      <>
+        <div className="md:hidden">
+          <AgentCard branding={branding} variant="compact" onContact={onContact} />
+        </div>
+        <div className="hidden md:block">
+          <AgentCard branding={branding} variant="full" onContact={onContact} />
+        </div>
+      </>
+    );
+  }
 
   const initials = (agentName ?? "")
     .split(/\s+/)
@@ -24,12 +41,21 @@ export function AgentCard({ branding, variant = "compact", onContact }: AgentCar
   const accent = primaryColor ?? "#205081";
   const accentText = readableTextOn(accent);
 
+  // Compact variant doubles as the mobile contact-trigger. If onContact is
+  // wired we render the pill as a button so a single tap reaches the gate.
+  const compactAsButton = variant === "compact" && Boolean(onContact);
+  const Wrapper = (compactAsButton ? "button" : "div") as "div" | "button";
   return (
-    <div
+    <Wrapper
+      type={compactAsButton ? "button" : undefined}
+      onClick={compactAsButton ? onContact : undefined}
+      aria-label={compactAsButton ? `Contact ${agentName ?? "agent"}` : undefined}
       className={
         variant === "full"
           ? "flex items-center gap-3 rounded-xl border border-white/20 bg-black/70 p-3 text-white shadow-2xl backdrop-blur-md"
-          : "flex items-center gap-2 rounded-full border border-white/20 bg-black/60 py-1.5 pl-1.5 pr-3 text-white shadow-lg backdrop-blur-md"
+          : compactAsButton
+            ? "flex cursor-pointer items-center gap-2 rounded-full border border-white/20 bg-black/60 py-1.5 pl-1.5 pr-3 text-left text-white shadow-lg backdrop-blur-md hover:bg-black/70"
+            : "flex items-center gap-2 rounded-full border border-white/20 bg-black/60 py-1.5 pl-1.5 pr-3 text-white shadow-lg backdrop-blur-md"
       }
     >
       <div
@@ -86,6 +112,6 @@ export function AgentCard({ branding, variant = "compact", onContact }: AgentCar
           ) : null}
         </div>
       ) : null}
-    </div>
+    </Wrapper>
   );
 }

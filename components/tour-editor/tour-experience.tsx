@@ -1050,13 +1050,13 @@ export function TourExperience({
           </div>
         ) : null}
 
-        <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-3 p-4">
+        <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:gap-3 sm:p-4">
           {!isEmbedMode && !isKioskMode ? (
-            <div className="pointer-events-auto flex flex-col items-start gap-2">
-              <div className="rounded-lg bg-black/60 px-3 py-2 text-white shadow-lg backdrop-blur-md">
-                <div className="text-sm font-semibold">{tour.title}</div>
+            <div className="pointer-events-auto flex min-w-0 flex-col items-start gap-2">
+              <div className="max-w-[60vw] rounded-lg bg-black/60 px-2.5 py-1.5 text-white shadow-lg backdrop-blur-md sm:max-w-none sm:px-3 sm:py-2">
+                <div className="truncate text-xs font-semibold sm:text-sm">{tour.title}</div>
                 {tour.propertyAddress ? (
-                  <div className="text-xs text-white/70">{tour.propertyAddress}</div>
+                  <div className="hidden truncate text-xs text-white/70 sm:block">{tour.propertyAddress}</div>
                 ) : null}
               </div>
               {showListingDetails ? (
@@ -1070,7 +1070,7 @@ export function TourExperience({
             <div className="pointer-events-auto">
               <AgentCard
                 branding={tour.branding!}
-                variant="full"
+                variant="responsive"
                 onContact={handleContactClick}
               />
             </div>
