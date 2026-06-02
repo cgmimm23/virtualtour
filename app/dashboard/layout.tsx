@@ -23,6 +23,9 @@ export default async function DashboardLayout({
               <Link href="/dashboard/leads" className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100">
                 Leads
               </Link>
+              <Link href="/dashboard/analytics" className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100">
+                Analytics
+              </Link>
               <Link href="/dashboard/team" className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100">
                 Team
               </Link>

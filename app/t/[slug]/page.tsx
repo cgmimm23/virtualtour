@@ -4,6 +4,7 @@ import type { Metadata } from "next";
 import { fetchPublicTourBySlug } from "@/lib/tour/public";
 import { resolveTourImageUrls } from "@/lib/r2/resolve";
 import { PublicTourExperience } from "@/components/tour-editor/public-tour-experience";
+import { ViewTracker } from "@/components/tour-viewer/view-tracker";
 import type { Tour } from "@/lib/tour/types";
 
 interface PageProps {
@@ -68,6 +69,7 @@ export default async function TourPage({ params }: PageProps) {
       >
         <PublicTourExperience tour={tour} />
       </Suspense>
+      <ViewTracker slug={tour.slug} />
     </>
   );
 }

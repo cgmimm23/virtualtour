@@ -419,6 +419,16 @@ export interface Database {
         Args: { p_token: string };
         Returns: unknown;
       };
+      track_tour_view: {
+        Args: {
+          p_tour_slug: string;
+          p_session_id: string;
+          p_referrer?: string | null;
+          p_country?: string | null;
+          p_device?: string | null;
+        };
+        Returns: boolean;
+      };
       submit_public_lead: {
         Args: {
           p_tour_slug: string;
