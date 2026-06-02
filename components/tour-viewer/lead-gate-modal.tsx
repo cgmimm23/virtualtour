@@ -33,8 +33,10 @@ export function LeadGateModal({ config, branding, onSubmit, onSkip }: LeadGateMo
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm p-4">
-      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-neutral-950 p-6 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/70 backdrop-blur-sm p-0 sm:items-center sm:p-4">
+      <div className="max-h-[92vh] w-full max-w-md overflow-y-auto rounded-t-2xl bg-white p-5 shadow-2xl dark:bg-neutral-950 sm:rounded-2xl sm:p-6"
+        style={{ paddingBottom: "calc(1.25rem + env(safe-area-inset-bottom, 0))" }}
+      >
         {branding?.agentName ? (
           <div className="mb-4 flex items-center gap-3 border-b border-neutral-200 dark:border-neutral-800 pb-4">
             {branding.agentPhotoUrl ? (
