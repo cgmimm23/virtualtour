@@ -39,6 +39,17 @@ export default async function TourPage({ params }: PageProps) {
   const { slug } = await params;
   const raw = await fetchPublicTourBySlug(slug);
   if (!raw) notFound();
+
+  // Enforce per-tour expiration (advertised feature, schema column existed
+  // but no surface ever checked it). Past the cutoff, return a branded
+  // "listing closed" page instead of opening the viewer.
+  if (raw.expiresAt) {
+    const endMs = new Date(raw.expiresAt).getTime();
+    if (!Number.isNaN(endMs) && endMs <= Date.now()) {
+      return <ExpiredTour title={raw.title} address={raw.propertyAddress} />;
+    }
+  }
+
   const tour = await resolveTourImageUrls(raw);
 
   return (
@@ -58,6 +69,27 @@ export default async function TourPage({ params }: PageProps) {
         <PublicTourExperience tour={tour} />
       </Suspense>
     </>
+  );
+}
+
+function ExpiredTour({ title, address }: { title: string; address: string }) {
+  return (
+    <div className="flex min-h-screen items-center justify-center bg-neutral-950 px-6 py-16 text-center text-neutral-100">
+      <div className="max-w-md">
+        <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-neutral-800">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400">
+            <path d="M12 6v6l4 2" />
+            <circle cx="12" cy="12" r="9" />
+          </svg>
+        </div>
+        <h1 className="text-xl font-semibold">This tour has closed</h1>
+        <p className="mt-2 text-sm text-neutral-400">
+          {title}
+          {address ? ` · ${address}` : ""} is no longer publicly viewable. The
+          listing agent may have a current property to share.
+        </p>
+      </div>
+    </div>
   );
 }
 

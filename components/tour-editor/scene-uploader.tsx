@@ -181,9 +181,10 @@ export function SceneUploader({ tourId, variant = "page", onUploaded }: SceneUpl
           <path d="M12 16V4m0 0l-4 4m4-4l4 4M4 20h16" strokeLinecap="round" strokeLinejoin="round" />
         </svg>
         <div>
-          <div className="text-sm font-medium">Drop 360° photos here or click to choose</div>
+          <div className="text-sm font-medium">Drop your whole batch here</div>
           <div className="mt-1 text-xs text-neutral-500">
-            JPEG, PNG, or WebP equirectangular panoramas · up to 50 MB each
+            Drag in 30 photos at once or pick a folder. JPEG / PNG / WebP equirectangular
+            panoramas · up to 50&nbsp;MB each · resized automatically.
           </div>
         </div>
         <input

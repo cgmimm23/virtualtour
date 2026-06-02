@@ -31,7 +31,7 @@ export async function signupAction(
       // Email confirmation flow lands here. The handler exchanges the code for
       // a session and redirects on to /dashboard (or billing checkout when a
       // paid plan was picked at the pricing page).
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback${plan ? `?next=${encodeURIComponent(`/dashboard/billing?checkout=${plan}`)}` : ""}`,
+      emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL ?? ""}/auth/callback?welcome=1${plan ? `&next=${encodeURIComponent(`/dashboard/billing?checkout=${plan}`)}` : ""}`,
     },
   });
   if (error) {
