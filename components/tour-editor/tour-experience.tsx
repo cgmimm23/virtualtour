@@ -130,6 +130,8 @@ export function TourExperience({
   const [historyIndex, setHistoryIndex] = useState(0);
   const [sceneToolsOpen, setSceneToolsOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const [visitorMenuOpen, setVisitorMenuOpen] = useState(false);
+  const [visitorChatOpen, setVisitorChatOpen] = useState(false);
   const [applyViewVersion, setApplyViewVersion] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPlayingHighlights, setIsPlayingHighlights] = useState(false);
@@ -1050,7 +1052,25 @@ export function TourExperience({
           </div>
         ) : null}
 
-        <header className="pointer-events-none absolute inset-x-0 top-0 flex items-start justify-between gap-2 p-2 sm:gap-3 sm:p-4">
+        {/* Mobile-only single overflow trigger — opens the visitor menu sheet
+            that consolidates title / agent / scenes / actions. The
+            individual chrome blocks below are md+ only on the public viewer. */}
+        {!isEmbedMode && !isKioskMode ? (
+          <button
+            type="button"
+            onClick={() => setVisitorMenuOpen(true)}
+            className="pointer-events-auto fixed right-3 top-3 z-40 inline-flex h-11 w-11 items-center justify-center rounded-full bg-black/65 text-white shadow-2xl backdrop-blur-md md:hidden"
+            aria-label="Open tour menu"
+          >
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="4" y1="6" x2="20" y2="6" />
+              <line x1="4" y1="12" x2="20" y2="12" />
+              <line x1="4" y1="18" x2="20" y2="18" />
+            </svg>
+          </button>
+        ) : null}
+
+        <header className="pointer-events-none absolute inset-x-0 top-0 hidden items-start justify-between gap-2 p-2 sm:gap-3 sm:p-4 md:flex">
           {!isEmbedMode && !isKioskMode ? (
             <div className="pointer-events-auto flex min-w-0 flex-col items-start gap-2">
               <div className="max-w-[60vw] rounded-lg bg-black/60 px-2.5 py-1.5 text-white shadow-lg backdrop-blur-md sm:max-w-none sm:px-3 sm:py-2">
@@ -1086,33 +1106,35 @@ export function TourExperience({
         ) : null}
 
         <div className="pointer-events-none absolute inset-x-0 bottom-0 flex flex-col items-center gap-2 p-4">
-          <div className="rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 backdrop-blur-md">
+          <div className="hidden rounded-full bg-black/60 px-3 py-1 text-xs text-white/80 backdrop-blur-md md:block">
             {currentScene.name}
             <span className="ml-2 text-white/50">
               {currentSceneIndex + 1} / {tour.scenes.length}
             </span>
           </div>
           {!isKioskMode ? (
-            <div className="pointer-events-auto flex items-end gap-2">
-              <PlaybackControls
-                onPrev={goToPrev}
-                onNext={goToNext}
-                onTogglePlay={handleTogglePlay}
-                isPlaying={isPlaying}
-                hasPrev={hasPrev}
-                hasNext={hasNext}
-                variant="share"
-              />
-              {hasHighlights && !isPlayingHighlights ? (
-                <button
-                  type="button"
-                  onClick={handleStartHighlights}
-                  className="rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-neutral-900 shadow-2xl hover:bg-amber-300"
-                  title={`Auto-play through ${tour.highlights!.length} highlight scene${tour.highlights!.length === 1 ? "" : "s"}`}
-                >
-                  ★ Watch highlights
-                </button>
-              ) : null}
+            <div className="pointer-events-auto flex max-w-full items-end gap-2">
+              <div className="hidden md:flex md:items-end md:gap-2">
+                <PlaybackControls
+                  onPrev={goToPrev}
+                  onNext={goToNext}
+                  onTogglePlay={handleTogglePlay}
+                  isPlaying={isPlaying}
+                  hasPrev={hasPrev}
+                  hasNext={hasNext}
+                  variant="share"
+                />
+                {hasHighlights && !isPlayingHighlights ? (
+                  <button
+                    type="button"
+                    onClick={handleStartHighlights}
+                    className="rounded-full bg-amber-400 px-3 py-2 text-xs font-semibold text-neutral-900 shadow-2xl hover:bg-amber-300"
+                    title={`Auto-play through ${tour.highlights!.length} highlight scene${tour.highlights!.length === 1 ? "" : "s"}`}
+                  >
+                    ★ Watch highlights
+                  </button>
+                ) : null}
+              </div>
               <SceneStrip
                 scenes={tour.scenes}
                 currentSceneId={currentSceneId}
@@ -1122,15 +1144,194 @@ export function TourExperience({
           ) : null}
         </div>
 
-        {/* Buyer chatbot — bottom-right, public tour only */}
+        {/* Buyer chatbot — bottom-right, public tour only. Hidden on mobile
+            (visitors reach it via the menu sheet); the floating chat button
+            still appears once the sheet routes them in via setVisitorChatOpen. */}
         {!isKioskMode && !isPreviewMode ? (
-          <div className="pointer-events-none absolute bottom-4 right-4 z-20 flex justify-end">
+          <div className="pointer-events-none absolute bottom-4 right-4 z-20 hidden justify-end md:flex">
             <BuyerChat
               tourSlug={tour.slug}
               agentName={!isNoBrandMode ? tour.branding?.agentName : undefined}
               agentPhotoUrl={!isNoBrandMode ? tour.branding?.agentPhotoUrl : undefined}
               primaryColor={tour.branding?.primaryColor}
             />
+          </div>
+        ) : null}
+        {visitorChatOpen && !isKioskMode && !isPreviewMode ? (
+          <div className="pointer-events-none fixed inset-0 z-40 flex items-end justify-end p-3 md:hidden">
+            <BuyerChat
+              tourSlug={tour.slug}
+              agentName={!isNoBrandMode ? tour.branding?.agentName : undefined}
+              agentPhotoUrl={!isNoBrandMode ? tour.branding?.agentPhotoUrl : undefined}
+              primaryColor={tour.branding?.primaryColor}
+              defaultOpen
+              onClose={() => setVisitorChatOpen(false)}
+            />
+          </div>
+        ) : null}
+
+        {/* Visitor mobile menu sheet — everything the visitor needs while
+            keeping the canvas clear. */}
+        {visitorMenuOpen ? (
+          <div className="fixed inset-0 z-50 flex items-end bg-black/60 md:hidden">
+            <div
+              className="absolute inset-0"
+              onClick={() => setVisitorMenuOpen(false)}
+              aria-hidden="true"
+            />
+            <div
+              className="relative max-h-[85vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-neutral-950"
+              style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0))" }}
+            >
+              <div className="mb-3 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-base font-semibold">{tour.title}</div>
+                  {tour.propertyAddress ? (
+                    <div className="truncate text-xs text-neutral-500">{tour.propertyAddress}</div>
+                  ) : null}
+                  <div className="mt-1 text-[10px] uppercase tracking-wider text-neutral-400">
+                    Scene {currentSceneIndex + 1} of {tour.scenes.length} · {currentScene.name}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setVisitorMenuOpen(false)}
+                  className="-mr-1 -mt-1 inline-flex h-9 w-9 items-center justify-center rounded-full text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                  aria-label="Close"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M18 6 6 18" />
+                    <path d="m6 6 12 12" />
+                  </svg>
+                </button>
+              </div>
+
+              {tour.branding && (tour.branding.agentName || tour.branding.brokerageName) ? (
+                <div className="mb-4 rounded-xl border border-neutral-200 p-3 dark:border-neutral-800">
+                  <div className="flex items-center gap-3">
+                    {tour.branding.agentPhotoUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
+                      <img
+                        src={tour.branding.agentPhotoUrl}
+                        alt={tour.branding.agentName ?? ""}
+                        className="h-12 w-12 flex-shrink-0 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div
+                        className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-full text-base font-semibold text-white"
+                        style={{ background: tour.branding.primaryColor ?? "#205081" }}
+                      >
+                        {(tour.branding.agentName ?? "?").slice(0, 1).toUpperCase()}
+                      </div>
+                    )}
+                    <div className="min-w-0">
+                      {tour.branding.agentName ? (
+                        <div className="truncate text-sm font-semibold">{tour.branding.agentName}</div>
+                      ) : null}
+                      {tour.branding.brokerageName ? (
+                        <div className="truncate text-xs text-neutral-500">{tour.branding.brokerageName}</div>
+                      ) : null}
+                    </div>
+                  </div>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    {tour.branding.agentPhone ? (
+                      <a
+                        href={`tel:${tour.branding.agentPhone}`}
+                        className="rounded-md border border-neutral-300 px-3 py-2 text-center text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                      >
+                        Call
+                      </a>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setVisitorMenuOpen(false);
+                        handleContactClick();
+                      }}
+                      className="rounded-md px-3 py-2 text-sm font-semibold text-white"
+                      style={{ background: tour.branding.primaryColor ?? "#205081" }}
+                    >
+                      Contact
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="mb-4 grid grid-cols-2 gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVisitorMenuOpen(false);
+                    handleTogglePlay();
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                >
+                  {isPlaying ? "⏸ Pause tour" : "▶ Auto-play tour"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setVisitorMenuOpen(false);
+                    setVisitorChatOpen(true);
+                  }}
+                  className="flex items-center justify-center gap-1.5 rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+                >
+                  💬 Ask AI
+                </button>
+                {hasHighlights ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setVisitorMenuOpen(false);
+                      handleStartHighlights();
+                    }}
+                    className="col-span-2 flex items-center justify-center gap-1.5 rounded-md bg-amber-400 px-3 py-2 text-sm font-semibold text-neutral-900 hover:bg-amber-300"
+                  >
+                    ★ Watch {tour.highlights!.length}-scene highlights
+                  </button>
+                ) : null}
+              </div>
+
+              <div className="border-t border-neutral-200 pt-3 dark:border-neutral-800">
+                <div className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-neutral-500">
+                  Jump to scene
+                </div>
+                <ul className="grid grid-cols-2 gap-2">
+                  {tour.scenes.map((s, i) => {
+                    const isCurrent = s.id === currentSceneId;
+                    return (
+                      <li key={s.id}>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            handleSelectScene(s.id);
+                            setVisitorMenuOpen(false);
+                          }}
+                          className={`flex w-full items-center gap-2 rounded-md border p-1.5 text-left ${
+                            isCurrent
+                              ? "border-brand-500 bg-brand-50 dark:bg-brand-950/30"
+                              : "border-neutral-200 hover:bg-neutral-100 dark:border-neutral-800 dark:hover:bg-neutral-800"
+                          }`}
+                        >
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={s.imageUrl}
+                            crossOrigin="anonymous"
+                            alt=""
+                            className="h-10 w-16 flex-shrink-0 rounded object-cover"
+                            loading="lazy"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <div className="truncate text-[11px] text-neutral-400">{i + 1}</div>
+                            <div className="truncate text-xs font-medium">{s.name}</div>
+                          </div>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </div>
           </div>
         ) : null}
 

@@ -8,6 +8,10 @@ interface BuyerChatProps {
   agentName?: string;
   agentPhotoUrl?: string;
   primaryColor?: string;
+  /** Render the chat panel open on first mount (used by the mobile menu). */
+  defaultOpen?: boolean;
+  /** Fired when the user closes the chat — lets a parent track open state. */
+  onClose?: () => void;
 }
 
 interface Msg {
@@ -24,10 +28,10 @@ function newSessionId(): string {
   return `s_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: BuyerChatProps) {
+export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor, defaultOpen = false, onClose }: BuyerChatProps) {
   const accent = primaryColor ?? "#205081";
   const accentText = readableTextOn(accent);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [input, setInput] = useState("");
   const [messages, setMessages] = useState<Msg[]>([]);
   const [pending, setPending] = useState(false);
@@ -188,7 +192,10 @@ export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: 
         </div>
         <button
           type="button"
-          onClick={() => setOpen(false)}
+          onClick={() => {
+            setOpen(false);
+            onClose?.();
+          }}
           className="-mr-2 inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/15 active:bg-white/25"
           style={{ color: accentText }}
           aria-label="Close chat"
