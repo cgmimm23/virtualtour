@@ -145,12 +145,54 @@ function buildSystemPrompt(ctx: ChatTourContext): string {
   return lines.join("\n");
 }
 
+/**
+ * Optional vision attachments for the current turn. The route passes scenes
+ * the user just mentioned (case-insensitive substring match against the
+ * latest user message) AND haven't been shown earlier in this session, so
+ * each scene image is at most one Claude vision call per chat session.
+ */
+export interface VisionAttachment {
+  sceneName: string;
+  imageUrl: string;
+}
+
 export async function answerBuyerQuestion(
   ctx: ChatTourContext,
   history: ChatTurn[],
+  attachments: VisionAttachment[] = [],
 ): Promise<string> {
   const client = await requireAnthropic();
   const systemPrompt = buildSystemPrompt(ctx);
+
+  const claudeMessages: Array<{
+    role: "user" | "assistant";
+    content:
+      | string
+      | Array<
+          | { type: "text"; text: string }
+          | { type: "image"; source: { type: "url"; url: string } }
+        >;
+  }> = history.map((t) => ({ role: t.role, content: t.content }));
+
+  // If there are vision attachments to add for the latest user turn, replace
+  // that turn's content with a multi-block array (text + images).
+  if (attachments.length > 0 && claudeMessages.length > 0) {
+    const last = claudeMessages[claudeMessages.length - 1];
+    if (last.role === "user" && typeof last.content === "string") {
+      const blocks: Array<
+        { type: "text"; text: string } | { type: "image"; source: { type: "url"; url: string } }
+      > = [];
+      for (const a of attachments) {
+        blocks.push({ type: "image", source: { type: "url", url: a.imageUrl } });
+        blocks.push({
+          type: "text",
+          text: `[Above is the "${a.sceneName}" panorama from this tour. Use it to answer questions about that room.]`,
+        });
+      }
+      blocks.push({ type: "text", text: last.content });
+      last.content = blocks;
+    }
+  }
 
   const response = await client.messages.create({
     model: AI_MODEL,
@@ -164,7 +206,7 @@ export async function answerBuyerQuestion(
         cache_control: { type: "ephemeral" },
       },
     ],
-    messages: history.map((t) => ({ role: t.role, content: t.content })),
+    messages: claudeMessages,
   });
 
   const textBlock = response.content.find((b) => b.type === "text");
