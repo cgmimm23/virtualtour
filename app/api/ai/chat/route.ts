@@ -34,11 +34,46 @@ export async function POST(req: Request) {
     .maybeSingle();
   if (!tour) return NextResponse.json({ error: "tour not found" }, { status: 404 });
 
+  // Scenes + hotspots. The hotspot label / payload text is often the highest-
+  // signal content the agent has authored ("new appliances 2023", "Bosch
+  // dishwasher"). Two queries because PostgREST can't disambiguate hotspot
+  // relations cleanly here; faster + simpler to just stitch in JS.
   const { data: scenes } = await supabase
     .from("scenes")
-    .select("name, floor, order_index")
+    .select("id, name, floor, order_index")
     .eq("tour_id", tour.id)
     .order("order_index");
+  const sceneIds = (scenes ?? []).map((s) => s.id);
+  const { data: hotspotsRaw } =
+    sceneIds.length > 0
+      ? await supabase
+          .from("hotspots")
+          .select("scene_id, label, type, payload")
+          .in("scene_id", sceneIds)
+      : { data: [] as Array<{ scene_id: string; label: string; type: string; payload: unknown }> };
+  const hotspotsByScene = new Map<string, Array<{ label: string; type: string; payload: unknown }>>();
+  for (const h of hotspotsRaw ?? []) {
+    if (!hotspotsByScene.has(h.scene_id)) hotspotsByScene.set(h.scene_id, []);
+    hotspotsByScene.get(h.scene_id)!.push({ label: h.label, type: h.type, payload: h.payload });
+  }
+
+  const sceneHotspots = (sceneId: string) => {
+    return (hotspotsByScene.get(sceneId) ?? [])
+      .map((h) => {
+        const payload =
+          h?.payload && typeof h.payload === "object"
+            ? (h.payload as Record<string, unknown>)
+            : null;
+        const info =
+          h.type === "info" && typeof payload?.bodyMarkdown === "string"
+            ? payload.bodyMarkdown
+            : h.type === "url" && typeof payload?.url === "string"
+              ? `Link: ${payload.url}`
+              : undefined;
+        return { label: h.label, info };
+      })
+      .filter((h) => h.label?.trim());
+  };
 
   // Load or create the chat session.
   const { data: existing } = await supabase
@@ -62,8 +97,12 @@ export async function POST(req: Request) {
       {
         title: tour.title,
         propertyAddress: tour.property_address ?? "",
-        scenes:
-          (scenes ?? []).map((s) => ({ name: s.name, floor: s.floor ?? undefined })),
+        scenes: (scenes ?? []).map((s) => ({
+          name: s.name,
+          floor: s.floor ?? undefined,
+          hotspots: sceneHotspots(s.id),
+        })),
+        highlights: Array.isArray(tour.highlights) ? tour.highlights : undefined,
         agent: tour.branding
           ? {
               name: (tour.branding as Record<string, string>).agentName,
@@ -77,6 +116,16 @@ export async function POST(req: Request) {
             ? (tour.details as Record<string, number | string>)
             : undefined,
         description: tour.ai_description ?? undefined,
+        mlsDescription: tour.mls_description ?? undefined,
+        qAndA: Array.isArray(tour.q_and_a)
+          ? (tour.q_and_a as Array<{ q: string; a: string }>)
+          : undefined,
+        externalSources: Array.isArray(tour.external_sources)
+          ? (tour.external_sources as Array<{ url: string; content: string }>).map((s) => ({
+              url: s.url,
+              content: s.content,
+            }))
+          : undefined,
       },
       history,
     );

@@ -207,6 +207,9 @@ export interface Database {
           webhook_url: string | null;
           ai_description: string | null;
           ai_description_generated_at: string | null;
+          mls_description: string | null;
+          q_and_a: Array<{ q: string; a: string }>;
+          external_sources: Array<{ url: string; fetched_at: string; content: string }>;
           created_at: string;
           updated_at: string;
         };
@@ -227,6 +230,9 @@ export interface Database {
           expires_at?: string | null;
           ai_description?: string | null;
           ai_description_generated_at?: string | null;
+          mls_description?: string | null;
+          q_and_a?: Array<{ q: string; a: string }>;
+          external_sources?: Array<{ url: string; fetched_at: string; content: string }>;
           webhook_url?: string | null;
           created_at?: string;
           updated_at?: string;

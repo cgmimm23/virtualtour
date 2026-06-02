@@ -149,6 +149,13 @@ export interface Tour {
   expiresAt?: string;
   /** Outbound webhook URL fired browser-side on each new lead — Zapier-compatible. */
   webhookUrl?: string;
+  /** Long-form MLS-style description authored by the agent. Fed to the buyer chatbot. */
+  mlsDescription?: string;
+  /** Agent-curated FAQ. Verbatim answers the chatbot uses when relevant. */
+  qAndA?: Array<{ q: string; a: string }>;
+  /** Server-fetched external listing pages (rentinsa.com, brokerage site, etc).
+      Cached content + URL + fetched timestamp. */
+  externalSources?: Array<{ url: string; fetchedAt: string; content: string }>;
 }
 
 export interface Lead {

@@ -76,6 +76,23 @@ export function rowToTour(row: TourWithRelations): Tour {
     details: castJson<ListingDetails>(row.details),
     expiresAt: row.expires_at ?? undefined,
     webhookUrl: row.webhook_url ?? undefined,
+    mlsDescription:
+      castJson<string>((row as { mls_description?: string | null }).mls_description) ?? undefined,
+    qAndA: castJson<Array<{ q: string; a: string }>>(
+      (row as { q_and_a?: unknown }).q_and_a,
+    ),
+    externalSources: (() => {
+      // DB stores snake_case fetched_at; convert at the boundary.
+      const raw = castJson<Array<{ url: string; fetched_at?: string; fetchedAt?: string; content: string }>>(
+        (row as { external_sources?: unknown }).external_sources,
+      );
+      if (!raw || raw.length === 0) return undefined;
+      return raw.map((s) => ({
+        url: s.url,
+        fetchedAt: s.fetchedAt ?? s.fetched_at ?? "",
+        content: s.content,
+      }));
+    })(),
     scenes,
   };
 }
@@ -116,7 +133,14 @@ export function tourToRows(tour: Tour, teamId: string) {
     details: tour.details ?? null,
     expires_at: tour.expiresAt ?? null,
     webhook_url: tour.webhookUrl ?? null,
-  };
+    mls_description: tour.mlsDescription ?? null,
+    q_and_a: tour.qAndA ?? [],
+    external_sources: (tour.externalSources ?? []).map((s) => ({
+      url: s.url,
+      fetched_at: s.fetchedAt,
+      content: s.content,
+    })),
+  } as Database["public"]["Tables"]["tours"]["Update"];
 
   const scenes: SceneUpsert[] = tour.scenes.map((s, i) => ({
     id: s.id,

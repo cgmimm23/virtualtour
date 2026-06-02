@@ -14,7 +14,14 @@ export interface ChatTurn {
 export interface ChatTourContext {
   title: string;
   propertyAddress: string;
-  scenes: Array<{ name: string; floor?: string }>;
+  scenes: Array<{
+    name: string;
+    floor?: string;
+    /** Hotspot labels + info text on this scene — agents author these and
+        they're often the highest-signal content. */
+    hotspots?: Array<{ label: string; info?: string }>;
+  }>;
+  highlights?: string[];
   agent?: {
     name?: string;
     brokerage?: string;
@@ -31,14 +38,33 @@ export interface ChatTourContext {
     status?: string;
     propertyType?: string;
   };
+  /** AI-generated short description (≤200 words). */
   description?: string;
+  /** Long-form MLS-style description authored by the agent. */
+  mlsDescription?: string;
+  /** Agent-curated FAQ. */
+  qAndA?: Array<{ q: string; a: string }>;
+  /** Server-fetched external listing pages (rentinsa.com, brokerage site). */
+  externalSources?: Array<{ url: string; content: string }>;
 }
+
+// Per-source content caps so a long listing page doesn't blow past Claude's
+// system-prompt sweet spot. ~3K chars ≈ ~750 tokens; with 3 sources max we
+// stay well under the cache-control boundary.
+const EXTERNAL_SOURCE_CAP = 3000;
+const MAX_EXTERNAL_SOURCES = 3;
 
 function buildSystemPrompt(ctx: ChatTourContext): string {
   const lines: string[] = [
     `You are the AI assistant on a real-estate virtual-tour listing for "${ctx.title}".`,
     "",
     "Your job: answer buyer questions about THIS property based on the facts below. Be concise (1-3 sentences usually). Friendly but not chatty. Real estate is a serious purchase.",
+    "",
+    "PRIORITY ORDER for facts when there's overlap:",
+    "  1. AGENT FAQ (verbatim — these are the agent's curated answers, treat as authoritative)",
+    "  2. PROPERTY FACTS + AGENT DESCRIPTION",
+    "  3. EXTERNAL LISTING SOURCES (cross-reference for additional detail)",
+    "  4. ROOM/HOTSPOT data (what's visually present in each scene)",
     "",
     "If asked something you don't know (school district, HOA fees, exact ceiling height, etc.) say so honestly and offer to connect them with the agent. Never invent specifics.",
     "",
@@ -58,19 +84,51 @@ function buildSystemPrompt(ctx: ChatTourContext): string {
   if (ctx.details?.propertyType) lines.push(`Type: ${ctx.details.propertyType}`);
   if (ctx.description) {
     lines.push("");
-    lines.push("Property description:");
+    lines.push("AGENT DESCRIPTION (short)");
     lines.push(ctx.description);
   }
+  if (ctx.mlsDescription) {
+    lines.push("");
+    lines.push("MLS / LONG-FORM DESCRIPTION");
+    lines.push(ctx.mlsDescription);
+  }
+  if (ctx.qAndA && ctx.qAndA.length > 0) {
+    lines.push("");
+    lines.push("AGENT FAQ (use these answers verbatim when relevant)");
+    for (const qa of ctx.qAndA) {
+      if (!qa.q?.trim() || !qa.a?.trim()) continue;
+      lines.push(`Q: ${qa.q.trim()}`);
+      lines.push(`A: ${qa.a.trim()}`);
+    }
+  }
+  if (ctx.externalSources && ctx.externalSources.length > 0) {
+    lines.push("");
+    lines.push("EXTERNAL LISTING SOURCES (server-fetched, cached)");
+    for (const src of ctx.externalSources.slice(0, MAX_EXTERNAL_SOURCES)) {
+      if (!src.content?.trim()) continue;
+      lines.push(`--- ${src.url} ---`);
+      lines.push(src.content.trim().slice(0, EXTERNAL_SOURCE_CAP));
+    }
+  }
   lines.push("");
-  lines.push("ROOMS IN THE TOUR (in order):");
-  const grouped: Record<string, string[]> = {};
+  lines.push("ROOMS IN THE TOUR (in order, with hotspots if any)");
+  const grouped: Record<string, typeof ctx.scenes> = {};
   for (const s of ctx.scenes) {
     const f = s.floor || "Unsorted";
     grouped[f] = grouped[f] || [];
-    grouped[f].push(s.name);
+    grouped[f].push(s);
   }
-  for (const [floor, names] of Object.entries(grouped)) {
-    lines.push(`${floor}: ${names.join(", ")}`);
+  for (const [floor, scenes] of Object.entries(grouped)) {
+    lines.push(`Floor: ${floor}`);
+    for (const s of scenes) {
+      lines.push(`  • ${s.name}`);
+      if (s.hotspots && s.hotspots.length > 0) {
+        for (const h of s.hotspots) {
+          const info = h.info?.trim();
+          lines.push(`      - ${h.label}${info ? `: ${info}` : ""}`);
+        }
+      }
+    }
   }
   if (ctx.agent?.name) {
     lines.push("");
