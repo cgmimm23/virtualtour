@@ -129,6 +129,7 @@ export function TourExperience({
   const [clipboardHotspot, setClipboardHotspot] = useState<ClipboardHotspot | null>(null);
   const [historyIndex, setHistoryIndex] = useState(0);
   const [sceneToolsOpen, setSceneToolsOpen] = useState(false);
+  const [moreOpen, setMoreOpen] = useState(false);
   const [applyViewVersion, setApplyViewVersion] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [isPlayingHighlights, setIsPlayingHighlights] = useState(false);
@@ -1309,8 +1310,10 @@ export function TourExperience({
           </div>
 
           <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto md:max-w-none">
+            {/* Edit-mode actions: hidden on mobile, exposed via the "More"
+                sheet below. Desktop keeps the inline toolbar. */}
             {editMode ? (
-              <>
+              <div className="hidden items-center gap-1 md:flex">
                 <ToolbarButton
                   onClick={handleUndo}
                   disabled={!canUndo}
@@ -1391,24 +1394,26 @@ export function TourExperience({
                   Leads
                 </ToolbarButton>
                 <span className="mx-1 h-5 w-px bg-neutral-200 dark:bg-neutral-800" />
-              </>
+              </div>
             ) : null}
 
             <a
               href={`/t/${tour.slug}?view=1`}
               target="_blank"
               rel="noopener noreferrer"
-              className="rounded-md px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800"
+              className="hidden rounded-md px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 md:inline-block dark:text-neutral-300 dark:hover:bg-neutral-800"
               title="Open the public viewer in a new tab"
             >
               Share view ↗
             </a>
-            <ToolbarButton onClick={() => setEmbedOpen(true)} title="Embed code (iframe)">
-              Embed
-            </ToolbarButton>
-            <ToolbarButton onClick={() => setHelpOpen(true)} title="Help and tips for what you're doing">
-              Help
-            </ToolbarButton>
+            <div className="hidden md:flex items-center gap-1">
+              <ToolbarButton onClick={() => setEmbedOpen(true)} title="Embed code (iframe)">
+                Embed
+              </ToolbarButton>
+              <ToolbarButton onClick={() => setHelpOpen(true)} title="Help and tips for what you're doing">
+                Help
+              </ToolbarButton>
+            </div>
 
             {canEdit ? (
               <span
@@ -1457,6 +1462,24 @@ export function TourExperience({
                 }`}
               >
                 {editMode ? "Editing" : "View mode"}
+              </button>
+            ) : null}
+
+            {/* Mobile-only overflow trigger — desktop has the full toolbar
+                rendered inline above. */}
+            {canEdit ? (
+              <button
+                type="button"
+                onClick={() => setMoreOpen(true)}
+                className="ml-1 rounded-md p-2 text-neutral-700 hover:bg-neutral-100 md:hidden dark:text-neutral-300 dark:hover:bg-neutral-800"
+                aria-label="More actions"
+                title="More actions"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                  <circle cx="5" cy="12" r="1.8" />
+                  <circle cx="12" cy="12" r="1.8" />
+                  <circle cx="19" cy="12" r="1.8" />
+                </svg>
               </button>
             ) : null}
 
@@ -1674,7 +1697,130 @@ export function TourExperience({
           editMode,
         })}
       />
+
+      {/* Mobile-only overflow sheet — every secondary toolbar action lives
+          here on phones so the top bar stays readable. md:hidden keeps it
+          out of the desktop tree entirely. */}
+      {moreOpen ? (
+        <div className="fixed inset-0 z-50 flex items-end bg-black/60 md:hidden">
+          <div
+            className="absolute inset-0"
+            onClick={() => setMoreOpen(false)}
+            aria-hidden="true"
+          />
+          <div
+            className="relative max-h-[80vh] w-full overflow-y-auto rounded-t-2xl bg-white p-4 shadow-2xl dark:bg-neutral-950"
+            style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom, 0))" }}
+          >
+            <div className="mb-3 flex items-center justify-between">
+              <div className="text-sm font-semibold">Tour actions</div>
+              <button
+                type="button"
+                onClick={() => setMoreOpen(false)}
+                className="rounded-md px-2 py-1 text-sm text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800"
+                aria-label="Close"
+              >
+                ✕
+              </button>
+            </div>
+
+            {editMode ? (
+              <div className="mb-3 grid grid-cols-2 gap-2">
+                <MobileMoreItem onClick={() => { handleUndo(); setMoreOpen(false); }} disabled={!canUndo}>
+                  ↶ Undo
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { handleRedo(); setMoreOpen(false); }} disabled={!canRedo}>
+                  ↷ Redo
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { handleAiAutoName(); setMoreOpen(false); }} disabled={aiNamingState.running}>
+                  {aiNamingState.running
+                    ? `Naming ${aiNamingState.done}/${aiNamingState.total}…`
+                    : "✨ AI auto-name"}
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { handleAutoDoorways("next-only"); setMoreOpen(false); }}>
+                  Auto-link →
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { handleAutoDoorways("next-and-prev"); setMoreOpen(false); }}>
+                  Auto-link ⇄
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { setSceneToolsOpen((v) => !v); setMoreOpen(false); }}>
+                  {sceneToolsOpen ? "Hide align" : "Align"}
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { setBrandingOpen(true); setMoreOpen(false); }}>
+                  Branding
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { setHighlightsOpen(true); setMoreOpen(false); }}>
+                  Highlights{hasHighlights ? ` (${tour.highlights!.length})` : ""}
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { setFloorPlanOpen(true); setMoreOpen(false); }}>
+                  Floor plan
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { setListingDetailsOpen(true); setMoreOpen(false); }}>
+                  Listing
+                </MobileMoreItem>
+                <MobileMoreItem onClick={() => { setLeadsOpen(true); setMoreOpen(false); }}>
+                  Leads
+                </MobileMoreItem>
+              </div>
+            ) : null}
+
+            <div className="grid grid-cols-2 gap-2">
+              <a
+                href={`/t/${tour.slug}?view=1`}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => setMoreOpen(false)}
+                className="flex items-center justify-center rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+              >
+                Share view ↗
+              </a>
+              <MobileMoreItem onClick={() => { setEmbedOpen(true); setMoreOpen(false); }}>
+                Embed
+              </MobileMoreItem>
+              <MobileMoreItem onClick={() => { setHelpOpen(true); setMoreOpen(false); }}>
+                Help
+              </MobileMoreItem>
+              <MobileMoreItem onClick={() => { handleExport(); setMoreOpen(false); }}>
+                Export
+              </MobileMoreItem>
+              <MobileMoreItem onClick={() => { fileInputRef.current?.click(); setMoreOpen(false); }}>
+                Import
+              </MobileMoreItem>
+              <MobileMoreItem onClick={() => { void handleReset(); setMoreOpen(false); }} variant="danger">
+                Reset
+              </MobileMoreItem>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
+  );
+}
+
+function MobileMoreItem({
+  children,
+  onClick,
+  disabled,
+  variant = "default",
+}: {
+  children: React.ReactNode;
+  onClick: () => void;
+  disabled?: boolean;
+  variant?: "default" | "danger";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className={`flex items-center justify-center rounded-md border px-3 py-2 text-sm font-medium disabled:cursor-not-allowed disabled:opacity-40 ${
+        variant === "danger"
+          ? "border-red-200 text-red-700 hover:bg-red-50 dark:border-red-900 dark:text-red-300 dark:hover:bg-red-950/30"
+          : "border-neutral-300 hover:bg-neutral-100 dark:border-neutral-700 dark:hover:bg-neutral-800"
+      }`}
+    >
+      {children}
+    </button>
   );
 }
 
