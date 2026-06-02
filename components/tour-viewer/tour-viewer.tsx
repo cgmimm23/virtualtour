@@ -82,11 +82,20 @@ export function TourViewer({
       });
       viewerRef.current = viewer;
 
+      // Bump the FOV limit so the mobile widen-on-load below has headroom.
       const limiter = Marzipano.RectilinearView.limit.traditional(
         4096,
-        (110 * Math.PI) / 180,
+        (140 * Math.PI) / 180,
       );
       const geometry = new Marzipano.EquirectGeometry([{ width: 4096 }]);
+
+      // On phone-width viewports the saved FOV (90° default) feels zoomed
+      // in — the canvas is narrow, so less of the scene is visible. Bump
+      // each scene's opening FOV to ~115° on small screens so the visitor
+      // sees more of the room without having to pinch out.
+      const isPhone =
+        typeof window !== "undefined" && window.innerWidth < 640;
+      const mobileFov = (115 * Math.PI) / 180;
 
       const map = new Map<string, MScene>();
       for (const s of scenes) {
@@ -94,7 +103,7 @@ export function TourViewer({
           {
             yaw: s.initialYaw,
             pitch: s.initialPitch,
-            fov: s.initialFov,
+            fov: isPhone ? Math.max(s.initialFov, mobileFov) : s.initialFov,
             roll: s.initialRoll ?? 0,
           },
           limiter,
