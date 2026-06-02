@@ -90,12 +90,16 @@ export function TourViewer({
       const geometry = new Marzipano.EquirectGeometry([{ width: 4096 }]);
 
       // On phone-width viewports the saved FOV (90° default) feels zoomed
-      // in — the canvas is narrow, so less of the scene is visible. Bump
-      // each scene's opening FOV to ~115° on small screens so the visitor
-      // sees more of the room without having to pinch out.
-      const isPhone =
-        typeof window !== "undefined" && window.innerWidth < 640;
-      const mobileFov = (115 * Math.PI) / 180;
+      // in — the canvas is narrow, so less of the scene is visible and
+      // the visitor loses the depth of the room. Bump opening FOV wider
+      // on small / medium screens so the scene reads more naturally.
+      const w = typeof window !== "undefined" ? window.innerWidth : 1024;
+      const mobileFov =
+        w < 480
+          ? (130 * Math.PI) / 180 // narrow phones — go widest
+          : w < 768
+            ? (120 * Math.PI) / 180 // large phones / portrait tablets
+            : 0; // desktop — respect saved FOV
 
       const map = new Map<string, MScene>();
       for (const s of scenes) {
@@ -103,7 +107,7 @@ export function TourViewer({
           {
             yaw: s.initialYaw,
             pitch: s.initialPitch,
-            fov: isPhone ? Math.max(s.initialFov, mobileFov) : s.initialFov,
+            fov: mobileFov > 0 ? Math.max(s.initialFov, mobileFov) : s.initialFov,
             roll: s.initialRoll ?? 0,
           },
           limiter,
