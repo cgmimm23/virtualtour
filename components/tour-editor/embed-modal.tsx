@@ -150,10 +150,10 @@ export function EmbedModal({ tourSlug, onClose }: EmbedModalProps) {
             </div>
           </div>
 
-          <div className="rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/30 p-3 text-xs text-amber-900 dark:text-amber-200">
-            <strong>Heads up:</strong> in this prototype the tour is served from
-            <span className="font-mono"> {origin || "this localhost"}</span>. Once you put the
-            tour on a public domain (M3+), the same snippet works on any site.
+          <div className="rounded-md border border-neutral-200 bg-neutral-50 p-3 text-xs text-neutral-600 dark:border-neutral-800 dark:bg-neutral-900 dark:text-neutral-400">
+            Iframe loads from <span className="font-mono">{origin || "your site"}</span>. The
+            tour stays editable from your dashboard — embeds always reflect the latest
+            scenes and hotspots.
           </div>
         </div>
       </div>

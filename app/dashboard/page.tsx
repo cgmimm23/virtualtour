@@ -3,6 +3,7 @@ import { requireActiveTeam, isPlatformAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { CreateTourButton } from "./create-tour-button";
+import { TourCardActions } from "./tour-card-actions";
 
 export const metadata = { title: "Tours — Tourly" };
 
@@ -172,15 +173,18 @@ export default async function DashboardPage({ searchParams }: PageProps) {
                     <p className="truncate text-xs text-neutral-500">{t.property_address}</p>
                   ) : null}
                 </div>
-                <span
-                  className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
-                    t.status === "published"
-                      ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
-                      : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
-                  }`}
-                >
-                  {t.status}
-                </span>
+                <div className="flex shrink-0 items-center gap-1.5">
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold uppercase tracking-wider ${
+                      t.status === "published"
+                        ? "bg-emerald-100 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300"
+                        : "bg-neutral-100 text-neutral-600 dark:bg-neutral-800 dark:text-neutral-400"
+                    }`}
+                  >
+                    {t.status}
+                  </span>
+                  <TourCardActions tourId={t.id} tourTitle={t.title} />
+                </div>
               </div>
               <div className="mt-3 flex items-center gap-3 text-xs text-neutral-500">
                 <span>{t.view_count} views</span>

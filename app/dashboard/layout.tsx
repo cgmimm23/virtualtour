@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireActiveTeam } from "@/lib/auth";
+import { requireActiveTeam, isPlatformAdmin } from "@/lib/auth";
 
 export default async function DashboardLayout({
   children,
@@ -7,6 +7,7 @@ export default async function DashboardLayout({
   children: React.ReactNode;
 }) {
   const { team } = await requireActiveTeam();
+  const admin = await isPlatformAdmin();
 
   return (
     <div className="flex min-h-screen flex-col bg-neutral-50 dark:bg-neutral-950 text-neutral-900 dark:text-neutral-100">
@@ -32,6 +33,15 @@ export default async function DashboardLayout({
               <Link href="/dashboard/billing" className="text-neutral-600 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-neutral-100">
                 Billing
               </Link>
+              {admin ? (
+                <Link
+                  href="/admin"
+                  className="rounded-md bg-brand-50 px-2 py-0.5 text-brand-700 hover:bg-brand-100"
+                  title="Platform admin (you're seeing this because you're a platform admin)"
+                >
+                  Admin
+                </Link>
+              ) : null}
             </nav>
           </div>
           <div className="flex items-center gap-3 text-sm">
