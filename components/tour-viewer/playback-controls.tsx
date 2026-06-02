@@ -8,6 +8,8 @@ interface PlaybackControlsProps {
   hasPrev: boolean;
   hasNext: boolean;
   variant?: "share" | "editor";
+  /** Hide the play/pause button — used in editor where autoplay is intentionally disabled. */
+  hidePlay?: boolean;
 }
 
 export function PlaybackControls({
@@ -18,6 +20,7 @@ export function PlaybackControls({
   hasPrev,
   hasNext,
   variant = "share",
+  hidePlay = false,
 }: PlaybackControlsProps) {
   return (
     <div
@@ -32,18 +35,20 @@ export function PlaybackControls({
           <polyline points="15 18 9 12 15 6" />
         </svg>
       </Btn>
-      <Btn onClick={onTogglePlay} ariaLabel={isPlaying ? "Pause" : "Play"} variant={variant} title={isPlaying ? "Pause (Space)" : "Auto-play (Space)"} highlight>
-        {isPlaying ? (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <rect x="6" y="5" width="4" height="14" rx="1" />
-            <rect x="14" y="5" width="4" height="14" rx="1" />
-          </svg>
-        ) : (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-            <polygon points="6 4 20 12 6 20 6 4" />
-          </svg>
-        )}
-      </Btn>
+      {!hidePlay ? (
+        <Btn onClick={onTogglePlay} ariaLabel={isPlaying ? "Pause" : "Play"} variant={variant} title={isPlaying ? "Pause (Space)" : "Auto-play (Space)"} highlight>
+          {isPlaying ? (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <rect x="6" y="5" width="4" height="14" rx="1" />
+              <rect x="14" y="5" width="4" height="14" rx="1" />
+            </svg>
+          ) : (
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+              <polygon points="6 4 20 12 6 20 6 4" />
+            </svg>
+          )}
+        </Btn>
+      ) : null}
       <Btn onClick={onNext} disabled={!hasNext} ariaLabel="Next scene" variant={variant} title="Next (→)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="9 18 15 12 9 6" />

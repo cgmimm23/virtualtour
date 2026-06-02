@@ -1543,6 +1543,7 @@ export function TourExperience({
                   hasPrev={hasPrev}
                   hasNext={hasNext}
                   variant="editor"
+                  hidePlay
                 />
                 {hasHighlights && !isPlayingHighlights ? (
                   <button
