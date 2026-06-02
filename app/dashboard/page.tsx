@@ -41,8 +41,60 @@ export default async function DashboardPage({ searchParams }: PageProps) {
       : `${list.length} / ${limit} ${list.length === 1 ? "tour" : "tours"}`;
   const planLabel = team.plan.charAt(0).toUpperCase() + team.plan.slice(1);
 
+  // Trial countdown — only shown to non-admin trial users with a clock set.
+  const trial = (() => {
+    if (admin || team.plan !== "trial" || !team.trial_ends_at) return null;
+    const endMs = new Date(team.trial_ends_at).getTime();
+    const days = Math.ceil((endMs - Date.now()) / (24 * 60 * 60 * 1000));
+    const expired = days <= 0;
+    const tone = expired ? "expired" : days <= 3 ? "urgent" : days <= 7 ? "warn" : "calm";
+    return { days, expired, tone } as const;
+  })();
+
+  const trialClasses = !trial
+    ? ""
+    : trial.tone === "expired" || trial.tone === "urgent"
+      ? "border-red-200 bg-red-50 text-red-900"
+      : trial.tone === "warn"
+        ? "border-amber-200 bg-amber-50 text-amber-900"
+        : "border-neutral-200 bg-neutral-50 text-neutral-700";
+
   return (
     <div className="mx-auto max-w-6xl px-6 py-10">
+      {trial ? (
+        <div
+          className={`mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border p-4 text-sm ${trialClasses}`}
+        >
+          <div>
+            {trial.expired ? (
+              <>
+                <strong>Your trial ended {Math.abs(trial.days)} day{Math.abs(trial.days) === 1 ? "" : "s"} ago.</strong>{" "}
+                Upgrade to keep publishing tours and capturing leads.
+              </>
+            ) : (
+              <>
+                <strong>
+                  Trial: {trial.days} day{trial.days === 1 ? "" : "s"} left
+                </strong>
+                {trial.tone !== "calm" ? " — pick a plan before it runs out." : "."}
+              </>
+            )}
+          </div>
+          <Link
+            href="/dashboard/billing"
+            className={`rounded-md px-3 py-1.5 text-xs font-semibold text-white ${
+              trial.tone === "expired" || trial.tone === "urgent"
+                ? "bg-red-600 hover:bg-red-700"
+                : trial.tone === "warn"
+                  ? "bg-amber-600 hover:bg-amber-700"
+                  : "bg-neutral-900 hover:bg-neutral-800"
+            }`}
+          >
+            See plans →
+          </Link>
+        </div>
+      ) : null}
+
       {sp.upgrade === "tours" ? (
         <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900">
           <div>
