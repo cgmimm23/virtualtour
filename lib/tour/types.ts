@@ -117,7 +117,7 @@ export interface LeadGateConfig {
 
 export interface ListingDetails {
   /** "For sale" / "Pending" / "Sold" — used for badges. */
-  status?: "for_sale" | "pending" | "sold" | "off_market";
+  status?: "for_sale" | "for_rent" | "pending" | "sold" | "off_market";
   listPrice?: number;
   beds?: number;
   /** Half baths counted as 0.5. */

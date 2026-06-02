@@ -64,7 +64,7 @@ export function ListingDetailsModal({ tour, onSave, onClose }: ListingDetailsMod
           <div className="flex flex-col gap-1 sm:col-span-2">
             <label className="text-xs font-medium text-neutral-500">Status</label>
             <div className="flex flex-wrap gap-1">
-              {(["for_sale", "pending", "sold", "off_market"] as const).map((s) => (
+              {(["for_sale", "for_rent", "pending", "sold", "off_market"] as const).map((s) => (
                 <button
                   key={s}
                   type="button"

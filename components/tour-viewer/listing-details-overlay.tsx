@@ -69,6 +69,7 @@ function Stat({ label, value }: { label: string; value: string }) {
 function StatusBadge({ status }: { status: NonNullable<ListingDetails["status"]> }) {
   const map: Record<NonNullable<ListingDetails["status"]>, { label: string; class: string }> = {
     for_sale: { label: "For sale", class: "bg-emerald-500 text-white" },
+    for_rent: { label: "For rent", class: "bg-sky-500 text-white" },
     pending: { label: "Pending", class: "bg-amber-400 text-neutral-900" },
     sold: { label: "Sold", class: "bg-neutral-700 text-white" },
     off_market: { label: "Off market", class: "bg-neutral-500 text-white" },
