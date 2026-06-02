@@ -163,11 +163,20 @@ export function TourExperience({
   // Reset local state when the upstream tour changes (e.g. after server save
   // revalidates the page). Per-session state (lead-gate-passed, scene
   // tracking) still comes from sessionStorage on first mount.
+  //
+  // Preserve currentSceneId across baseTour changes as long as the scene
+  // still exists. Without this guard, every auto-save → revalidate →
+  // baseTour-prop-reidentity round-trip would yank the user back to the
+  // cover scene mid-edit — even just nudging the view triggered it.
   useEffect(() => {
     setTour(baseTour);
     historyRef.current = [baseTour];
     setHistoryIndex(0);
-    setCurrentSceneId(baseTour.coverSceneId);
+    setCurrentSceneId((prev) =>
+      prev && baseTour.scenes.some((s) => s.id === prev)
+        ? prev
+        : baseTour.coverSceneId || baseTour.scenes[0]?.id || "",
+    );
     setHydrated(true);
     setGatePassed(hasGateBeenPassed(baseTour.slug));
     sessionStartRef.current = Date.now();
