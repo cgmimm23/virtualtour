@@ -16,22 +16,25 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   const raw = await fetchPublicTourBySlug(slug);
   if (!raw) return {};
   const tour = await resolveTourImageUrls(raw);
-  const cover = tour.scenes.find((s) => s.id === tour.coverSceneId) ?? tour.scenes[0];
   const desc = describe(tour);
+  // OG/Twitter images come from app/t/[slug]/opengraph-image.tsx now —
+  // Next attaches it automatically. The raw equirect cover was getting
+  // cropped weirdly by every social platform (2:1 vs the 1.91:1 social
+  // card ratio), so we drop the images array here.
   return {
     title: `${tour.title} — ${tour.propertyAddress || "Virtual tour"}`,
     description: desc,
+    alternates: { canonical: `/t/${tour.slug}` },
     openGraph: {
       title: tour.title,
       description: desc,
       type: "website",
-      images: cover ? [{ url: cover.imageUrl, alt: tour.title }] : [],
+      url: `/t/${tour.slug}`,
     },
     twitter: {
       card: "summary_large_image",
       title: tour.title,
       description: desc,
-      images: cover ? [cover.imageUrl] : [],
     },
   };
 }
