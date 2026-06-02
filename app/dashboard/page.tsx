@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { requireActiveTeam } from "@/lib/auth";
+import { requireActiveTeam, isPlatformAdmin } from "@/lib/auth";
 import { createClient } from "@/lib/supabase/server";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { CreateTourButton } from "./create-tour-button";
@@ -19,6 +19,9 @@ export default async function DashboardPage({ searchParams }: PageProps) {
   const { team } = await requireActiveTeam();
   const supabase = await createClient();
   const sp = await searchParams;
+  // Platform admins bypass tour quotas server-side. Mirror that in the UI so
+  // the dashboard doesn't lie about being "at the limit."
+  const admin = await isPlatformAdmin();
 
   // RLS enforces team_id; we still pass the filter to keep the index hot.
   const { data: tours } = await supabase
@@ -29,9 +32,11 @@ export default async function DashboardPage({ searchParams }: PageProps) {
 
   const list = tours ?? [];
   const limit = PLAN_LIMITS[team.plan].tours;
-  const atLimit = limit !== Number.POSITIVE_INFINITY && list.length >= limit;
-  const usageLabel =
-    limit === Number.POSITIVE_INFINITY
+  const atLimit =
+    !admin && limit !== Number.POSITIVE_INFINITY && list.length >= limit;
+  const usageLabel = admin
+    ? `${list.length} ${list.length === 1 ? "tour" : "tours"} · admin (no limit)`
+    : limit === Number.POSITIVE_INFINITY
       ? `${list.length} ${list.length === 1 ? "tour" : "tours"}`
       : `${list.length} / ${limit} ${list.length === 1 ? "tour" : "tours"}`;
   const planLabel = team.plan.charAt(0).toUpperCase() + team.plan.slice(1);
@@ -60,7 +65,8 @@ export default async function DashboardPage({ searchParams }: PageProps) {
         <div>
           <h1 className="text-2xl font-semibold">Your tours</h1>
           <p className="text-sm text-neutral-500">
-            {usageLabel} on {planLabel} plan
+            {usageLabel}
+            {!admin ? ` on ${planLabel} plan` : ""}
             {atLimit ? (
               <>
                 {" · "}
