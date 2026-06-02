@@ -158,7 +158,10 @@ export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: 
   }
 
   return (
-    <div className="pointer-events-auto flex h-[70vh] max-h-[600px] w-[92vw] max-w-sm flex-col overflow-hidden rounded-2xl border border-white/15 bg-white shadow-2xl">
+    <div
+      className="pointer-events-auto flex h-[85vh] max-h-[640px] w-[96vw] max-w-sm flex-col overflow-hidden rounded-2xl border border-white/15 bg-white shadow-2xl sm:h-[70vh] sm:w-[92vw]"
+      style={{ paddingBottom: "env(safe-area-inset-bottom, 0)" }}
+    >
       <header
         className="flex items-center justify-between gap-2 border-b border-neutral-200 px-4 py-3"
         style={{ background: accent, color: accentText }}
@@ -186,10 +189,11 @@ export function BuyerChat({ tourSlug, agentName, agentPhotoUrl, primaryColor }: 
         <button
           type="button"
           onClick={() => setOpen(false)}
-          className="-mr-1 rounded-full p-1 text-white/90 hover:bg-white/15"
+          className="-mr-2 inline-flex h-10 w-10 items-center justify-center rounded-full hover:bg-white/15 active:bg-white/25"
+          style={{ color: accentText }}
           aria-label="Close chat"
         >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
             <path d="M18 6 6 18" />
             <path d="m6 6 12 12" />
           </svg>
