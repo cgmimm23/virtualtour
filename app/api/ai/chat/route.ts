@@ -5,8 +5,9 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { answerBuyerQuestion } from "@/lib/ai/chatbot";
+import { answerBuyerQuestion, type VisionAttachment } from "@/lib/ai/chatbot";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveImageUrl } from "@/lib/r2/resolve";
 
 const Body = z.object({
   tourSlug: z.string().min(1).max(120),
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
   // relations cleanly here; faster + simpler to just stitch in JS.
   const { data: scenes } = await supabase
     .from("scenes")
-    .select("id, name, floor, order_index")
+    .select("id, name, floor, order_index, source_image_url")
     .eq("tour_id", tour.id)
     .order("order_index");
   const sceneIds = (scenes ?? []).map((s) => s.id);
@@ -91,6 +92,30 @@ export async function POST(req: Request) {
 
   history.push({ role: "user", content: parsed.data.message });
 
+  // Vision-on-demand: if the buyer mentioned a specific room by name, include
+  // that scene's image as a Claude vision attachment on this turn — but only
+  // if no prior user message in this session already mentioned it (we
+  // approximate that with a substring scan of historical user messages).
+  const lowerMsg = parsed.data.message.toLowerCase();
+  const earlierUserText = history
+    .slice(0, -1) // exclude the message just pushed
+    .filter((t) => t.role === "user")
+    .map((t) => t.content.toLowerCase())
+    .join(" ");
+  const attachments: VisionAttachment[] = [];
+  for (const s of scenes ?? []) {
+    const name = s.name?.trim();
+    if (!name || name.length < 3) continue;
+    const needle = name.toLowerCase();
+    // Only attach if the current message mentions it AND prior messages
+    // didn't. Cap at 2 attachments per turn to keep cost bounded.
+    if (lowerMsg.includes(needle) && !earlierUserText.includes(needle)) {
+      const url = await resolveImageUrl(s.source_image_url);
+      if (url) attachments.push({ sceneName: name, imageUrl: url });
+      if (attachments.length >= 2) break;
+    }
+  }
+
   let answer = "";
   try {
     answer = await answerBuyerQuestion(
@@ -128,6 +153,7 @@ export async function POST(req: Request) {
           : undefined,
       },
       history,
+      attachments,
     );
   } catch (err) {
     const msg = err instanceof Error ? err.message : "unknown";
