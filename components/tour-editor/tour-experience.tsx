@@ -1313,7 +1313,7 @@ export function TourExperience({
             {/* Edit-mode actions: hidden on mobile, exposed via the "More"
                 sheet below. Desktop keeps the inline toolbar. */}
             {editMode ? (
-              <div className="hidden items-center gap-1 md:flex">
+              <div className="hidden items-center gap-1 lg:flex">
                 <ToolbarButton
                   onClick={handleUndo}
                   disabled={!canUndo}
@@ -1401,12 +1401,12 @@ export function TourExperience({
               href={`/t/${tour.slug}?view=1`}
               target="_blank"
               rel="noopener noreferrer"
-              className="hidden rounded-md px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 md:inline-block dark:text-neutral-300 dark:hover:bg-neutral-800"
+              className="hidden rounded-md px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 lg:inline-block dark:text-neutral-300 dark:hover:bg-neutral-800"
               title="Open the public viewer in a new tab"
             >
               Share view ↗
             </a>
-            <div className="hidden md:flex items-center gap-1">
+            <div className="hidden lg:flex items-center gap-1">
               <ToolbarButton onClick={() => setEmbedOpen(true)} title="Embed code (iframe)">
                 Embed
               </ToolbarButton>
@@ -1471,7 +1471,7 @@ export function TourExperience({
               <button
                 type="button"
                 onClick={() => setMoreOpen(true)}
-                className="ml-1 rounded-md p-2 text-neutral-700 hover:bg-neutral-100 md:hidden dark:text-neutral-300 dark:hover:bg-neutral-800"
+                className="ml-1 rounded-md p-2 text-neutral-700 hover:bg-neutral-100 lg:hidden dark:text-neutral-300 dark:hover:bg-neutral-800"
                 aria-label="More actions"
                 title="More actions"
               >
@@ -1483,7 +1483,7 @@ export function TourExperience({
               </button>
             ) : null}
 
-            <div className="hidden md:flex items-center gap-1 border-l border-neutral-200 dark:border-neutral-800 pl-2 ml-1">
+            <div className="hidden lg:flex items-center gap-1 border-l border-neutral-200 dark:border-neutral-800 pl-2 ml-1">
               <ToolbarButton onClick={handleExport} title="Download tour config as JSON">
                 Export
               </ToolbarButton>
