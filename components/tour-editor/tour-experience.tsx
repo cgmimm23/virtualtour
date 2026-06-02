@@ -959,12 +959,20 @@ export function TourExperience({
   }, []);
 
   const handleSaveListingDetails = useCallback(
-    (patch: { details?: ListingDetails; expiresAt?: string; webhookUrl?: string }) => {
+    (patch: {
+      details?: ListingDetails;
+      expiresAt?: string;
+      webhookUrl?: string;
+      mlsDescription?: string;
+      qAndA?: Array<{ q: string; a: string }>;
+    }) => {
       commitTour((prev) => ({
         ...prev,
         details: patch.details,
         expiresAt: patch.expiresAt,
         webhookUrl: patch.webhookUrl,
+        mlsDescription: patch.mlsDescription,
+        qAndA: patch.qAndA,
       }));
     },
     [commitTour],
@@ -1861,6 +1869,7 @@ export function TourExperience({
       {listingDetailsOpen ? (
         <ListingDetailsModal
           tour={tour}
+          tourId={tour.id}
           onSave={handleSaveListingDetails}
           onClose={() => setListingDetailsOpen(false)}
         />
