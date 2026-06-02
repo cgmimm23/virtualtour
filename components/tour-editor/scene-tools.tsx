@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useTransition } from "react";
 import type { Scene } from "@/lib/tour/types";
 
 const RAD = Math.PI / 180;
@@ -38,6 +39,35 @@ export function SceneTools({
   const rollDeg = ((scene.initialRoll ?? 0) / RAD).toFixed(1);
   const fovDeg = (scene.initialFov / RAD).toFixed(0);
 
+  const [autoLeveling, startAutoLevel] = useTransition();
+  const [autoMessage, setAutoMessage] = useState<string | null>(null);
+
+  const onAutoLevel = () => {
+    setAutoMessage(null);
+    startAutoLevel(async () => {
+      try {
+        const res = await fetch("/api/ai/auto-level", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ sceneId: scene.id, imageUrl: scene.imageUrl }),
+        });
+        const json = await res.json();
+        if (!json.ok) {
+          setAutoMessage(`Couldn't auto-level: ${json.error ?? "unknown"}`);
+          return;
+        }
+        onUpdate({ initialRoll: json.roll, initialPitch: json.pitch });
+        const rollDegFmt = ((json.roll as number) * 180 / Math.PI).toFixed(1);
+        const pitchDegFmt = ((json.pitch as number) * 180 / Math.PI).toFixed(1);
+        setAutoMessage(
+          `Set roll ${rollDegFmt}° / pitch ${pitchDegFmt}° (confidence ${Math.round(json.confidence * 100)}%).`,
+        );
+      } catch (err) {
+        setAutoMessage(`Auto-level request failed: ${err instanceof Error ? err.message : "unknown"}`);
+      }
+    });
+  };
+
   return (
     <div className="pointer-events-auto absolute left-3 top-3 w-64 rounded-xl border border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-neutral-950/95 p-3 shadow-2xl backdrop-blur-md">
       <div className="mb-2 flex items-center justify-between">
@@ -54,6 +84,26 @@ export function SceneTools({
         >
           Reset
         </button>
+      </div>
+
+      <div className="mb-3 rounded-md border border-brand-200 bg-brand-50/60 p-2 dark:border-brand-900/40 dark:bg-brand-950/30">
+        <button
+          type="button"
+          onClick={onAutoLevel}
+          disabled={autoLeveling}
+          className="flex w-full items-center justify-center gap-1.5 rounded-md bg-brand-600 px-2 py-1.5 text-[11px] font-semibold text-white hover:bg-brand-700 disabled:opacity-50"
+        >
+          {autoLeveling ? "Analyzing…" : "✨ Auto-level (AI)"}
+        </button>
+        <p className="mt-1.5 text-[10px] leading-snug text-neutral-600 dark:text-neutral-400">
+          Sets the opening roll &amp; pitch using Claude vision. Panning may still show
+          the original tilt — re-shoot with a leveled tripod for perfect horizons.
+        </p>
+        {autoMessage ? (
+          <p className="mt-1.5 text-[10px] text-neutral-700 dark:text-neutral-300">
+            {autoMessage}
+          </p>
+        ) : null}
       </div>
 
       <div className="mb-3">

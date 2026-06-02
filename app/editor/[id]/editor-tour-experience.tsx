@@ -92,7 +92,7 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
         onSaveTour={onSaveTour}
         onLoadLeads={onLoadLeads}
       />
-      <div className="fixed left-5 top-5 z-40 flex items-center gap-2">
+      <div className="fixed left-3 top-3 z-40 flex max-w-[calc(100vw-1.5rem)] items-center gap-2 sm:left-5 sm:top-5">
         <Link
           href="/dashboard"
           className="flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-sm font-medium text-neutral-700 shadow-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700"
@@ -106,7 +106,7 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
         <button
           type="button"
           onClick={() => setInfoOpen(true)}
-          className="flex max-w-[24rem] items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm shadow-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-400 dark:bg-neutral-800 dark:hover:bg-neutral-700"
+          className="flex min-w-0 max-w-[14rem] items-center gap-2 rounded-full bg-white px-3 py-1.5 text-sm shadow-lg hover:bg-neutral-100 focus:outline-none focus:ring-2 focus:ring-neutral-400 sm:max-w-[24rem] dark:bg-neutral-800 dark:hover:bg-neutral-700"
           title="Rename tour / edit address"
         >
           <span className="min-w-0 truncate font-medium">{tour.title}</span>
@@ -116,7 +116,9 @@ export function EditorTourExperience({ tour, tourId, initialStatus }: EditorTour
           </svg>
         </button>
       </div>
-      <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+      <div className="fixed bottom-3 right-3 z-40 flex flex-col items-end gap-2 sm:bottom-5 sm:right-5"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0)" }}
+      >
         <button
           type="button"
           onClick={() => setShareOpen(true)}
