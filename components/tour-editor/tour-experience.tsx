@@ -582,26 +582,41 @@ export function TourExperience({
   }, [tour.highlights, currentSceneId, handleSelectScene]);
 
   const handleTogglePlay = useCallback(() => {
+    // No-op while editing — the play button is hidden in edit mode but the
+    // keyboard shortcut + any external trigger still need to be inert.
+    if (editMode) return;
     setIsPlaying((p) => !p);
     setIsPlayingHighlights(false);
-  }, []);
+  }, [editMode]);
 
   const handleStartHighlights = useCallback(() => {
+    if (editMode) return;
     const list = tour.highlights ?? [];
     if (list.length === 0) return;
     handleSelectScene(list[0]);
     setIsPlayingHighlights(true);
     setIsPlaying(true);
-  }, [tour.highlights, handleSelectScene]);
+  }, [editMode, tour.highlights, handleSelectScene]);
 
   // Auto-advance: when playing, advance to next scene every N ms. Resets the
   // timer on each scene change so the user gets a full N ms in each room.
+  // Hard-gated on !editMode so an in-flight timer can't tick while the user
+  // is placing hotspots — they have to hit Preview / Share view to see
+  // playback.
   useEffect(() => {
-    if (!isPlaying || tour.scenes.length < 2) return;
+    if (!isPlaying || editMode || tour.scenes.length < 2) return;
     const advance = isPlayingHighlights ? goToNextHighlight : goToNextLooped;
     const id = window.setTimeout(advance, AUTO_PLAY_INTERVAL_MS);
     return () => window.clearTimeout(id);
-  }, [isPlaying, isPlayingHighlights, currentSceneId, goToNextLooped, goToNextHighlight, tour.scenes.length]);
+  }, [
+    isPlaying,
+    editMode,
+    isPlayingHighlights,
+    currentSceneId,
+    goToNextLooped,
+    goToNextHighlight,
+    tour.scenes.length,
+  ]);
 
   // Keyboard navigation: ←/→ for prev/next, Space to toggle play. Disabled
   // while typing in inputs. Disabled in edit mode (collides with hotspot ops).
