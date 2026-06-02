@@ -77,3 +77,33 @@ body {
 .tour-stage canvas {
   display: block;
 }
+
+/*
+ * Prevent iOS Safari from zooming the page when an input is focused.
+ * The trigger is font-size < 16px. We bump form controls to 16px on
+ * narrow viewports; desktop keeps the design's 14px (text-sm) sizes.
+ */
+@media (max-width: 768px) {
+  input[type="text"],
+  input[type="email"],
+  input[type="password"],
+  input[type="tel"],
+  input[type="url"],
+  input[type="search"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/*
+ * Make the viewer canvas absorb touch gestures cleanly — without this the
+ * browser tries to scroll the page when the user drags to pan the panorama.
+ */
+.tour-stage,
+.tour-stage * {
+  touch-action: none;
+}

@@ -116,6 +116,10 @@ export function TourExperience({
   const [editMode, setEditMode] = useState(false);
   const [selectedHotspotId, setSelectedHotspotId] = useState<string | null>(null);
   const [infoModal, setInfoModal] = useState<{ title: string; body: string } | null>(null);
+  // Sidebar defaults open for desktop. We close on mount when the viewport
+  // is narrow so mobile users land on the viewer, not the scene list. We
+  // initialize to `true` instead of feature-detecting in useState to avoid
+  // a hydration mismatch.
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [brandingOpen, setBrandingOpen] = useState(false);
   const [leadsOpen, setLeadsOpen] = useState(false);
@@ -198,6 +202,15 @@ export function TourExperience({
       if (saveTimerRef.current) window.clearTimeout(saveTimerRef.current);
     };
   }, [tour, hydrated, canEdit, onSaveTour]);
+
+  // Close the sidebar by default on narrow viewports — desktop users keep it
+  // open. Runs once on mount; resize handlers would be over-engineering for
+  // a panel users can manually toggle.
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth < 768) {
+      setSidebarOpen(false);
+    }
+  }, []);
 
   // Scene-tracking for the lead gate trigger.
   useEffect(() => {
@@ -1182,28 +1195,63 @@ export function TourExperience({
   return (
     <div className="flex h-screen w-screen overflow-hidden bg-neutral-100 dark:bg-neutral-950">
       {sidebarOpen ? (
-        <aside className="flex w-64 flex-shrink-0 flex-col border-r border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950">
-          <div className="border-b border-neutral-200 dark:border-neutral-800 p-4">
-            <a href="/" className="text-xs uppercase tracking-widest text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100">
-              ← Tourly
-            </a>
-            <h1 className="mt-1 truncate font-semibold">{tour.title}</h1>
-            <p className="text-xs text-neutral-500">
-              {tour.scenes.length} scenes · {totalHotspots} hotspots
-            </p>
-          </div>
-          <ScenePicker
-            scenes={tour.scenes}
-            currentSceneId={currentSceneId}
-            coverSceneId={tour.coverSceneId}
-            onSelect={handleSelectScene}
-            onRename={handleRenameScene}
-            onSetCover={handleSetCover}
-            onReorder={handleReorderScenes}
-            onDelete={handleDeleteScene}
-            editMode={editMode}
+        <>
+          {/* Backdrop — mobile only — taps dismiss the drawer. */}
+          <div
+            className="fixed inset-0 z-20 bg-black/40 md:hidden"
+            onClick={() => setSidebarOpen(false)}
+            aria-hidden="true"
           />
-        </aside>
+          <aside
+            className="fixed inset-y-0 left-0 z-30 flex w-[min(20rem,85vw)] flex-shrink-0 flex-col border-r border-neutral-200 bg-white dark:border-neutral-800 dark:bg-neutral-950 md:static md:z-auto md:w-64"
+          >
+            <div className="flex items-start justify-between border-b border-neutral-200 p-4 dark:border-neutral-800">
+              <div className="min-w-0">
+                <a
+                  href="/dashboard"
+                  className="text-xs uppercase tracking-widest text-neutral-500 hover:text-neutral-900 dark:hover:text-neutral-100"
+                >
+                  ← Tours
+                </a>
+                <h1 className="mt-1 truncate font-semibold">{tour.title}</h1>
+                <p className="text-xs text-neutral-500">
+                  {tour.scenes.length} scenes · {totalHotspots} hotspots
+                </p>
+              </div>
+              {/* Mobile-only close button. Desktop keeps the toggle in the
+                  toolbar — visual symmetry isn't worth the extra clutter. */}
+              <button
+                type="button"
+                onClick={() => setSidebarOpen(false)}
+                className="-mr-1 ml-2 rounded-md p-1 text-neutral-500 hover:bg-neutral-100 dark:hover:bg-neutral-800 md:hidden"
+                aria-label="Close scene list"
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" />
+                  <line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+            </div>
+            <ScenePicker
+              scenes={tour.scenes}
+              currentSceneId={currentSceneId}
+              coverSceneId={tour.coverSceneId}
+              onSelect={(id) => {
+                handleSelectScene(id);
+                // Auto-close drawer after a pick on mobile so the user sees
+                // the viewer they just switched to.
+                if (typeof window !== "undefined" && window.innerWidth < 768) {
+                  setSidebarOpen(false);
+                }
+              }}
+              onRename={handleRenameScene}
+              onSetCover={handleSetCover}
+              onReorder={handleReorderScenes}
+              onDelete={handleDeleteScene}
+              editMode={editMode}
+            />
+          </aside>
+        </>
       ) : null}
 
       <div className="relative flex flex-1 flex-col overflow-hidden">
@@ -1221,14 +1269,21 @@ export function TourExperience({
             </svg>
           </button>
 
-          <div className="min-w-0 flex-1">
+          <div className="hidden min-w-0 flex-1 md:block">
             <div className="truncate text-sm font-medium">{currentScene.name}</div>
             <div className="text-xs text-neutral-500">
               {currentScene.hotspots.length} hotspot{currentScene.hotspots.length === 1 ? "" : "s"} on this scene
             </div>
           </div>
 
-          <div className="flex items-center gap-1">
+          {/* On mobile the title row above is hidden (it's in the drawer);
+              show a compact one-line variant so the user knows which scene
+              the buttons act on without sacrificing toolbar space. */}
+          <div className="min-w-0 flex-1 truncate text-sm font-medium md:hidden">
+            {currentScene.name}
+          </div>
+
+          <div className="flex min-w-0 max-w-full items-center gap-1 overflow-x-auto md:max-w-none">
             {editMode ? (
               <>
                 <ToolbarButton
@@ -1648,7 +1703,7 @@ function ToolbarButton({
       onClick={onClick}
       disabled={disabled}
       title={title}
-      className="rounded-md px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
+      className="shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-100 dark:text-neutral-300 dark:hover:bg-neutral-800 disabled:cursor-not-allowed disabled:opacity-40"
     >
       {children}
     </button>
