@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { generatePropertyDescription } from "@/lib/ai/description";
 import { getUser, isPlatformAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 const Body = z.object({ tourId: z.string().uuid() });
 
@@ -21,33 +21,28 @@ export async function POST(req: Request) {
     );
   }
 
-  const supabase = createAdminClient();
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("*")
-    .eq("id", parsed.data.tourId)
-    .maybeSingle();
+  const tour = await prisma.tours.findUnique({
+    where: { id: parsed.data.tourId },
+  });
   if (!tour) return NextResponse.json({ error: "tour not found" }, { status: 404 });
 
   const admin = await isPlatformAdmin();
   if (!admin) {
-    const { data: membership } = await supabase
-      .from("team_members")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("team_id", tour.team_id)
-      .maybeSingle();
+    const membership = await prisma.team_members.findUnique({
+      where: { team_id_user_id: { team_id: tour.team_id, user_id: user.id } },
+      select: { role: true },
+    });
     if (!membership || (membership.role !== "owner" && membership.role !== "admin")) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   }
 
   // Pull scene names + a few image URLs for visual context.
-  const { data: scenes } = await supabase
-    .from("scenes")
-    .select("name, source_image_url, order_index")
-    .eq("tour_id", tour.id)
-    .order("order_index");
+  const scenes = await prisma.scenes.findMany({
+    where: { tour_id: tour.id },
+    select: { name: true, source_image_url: true, order_index: true },
+    orderBy: { order_index: "asc" },
+  });
   const sceneList = (scenes ?? []).map((s) => ({
     name: s.name,
     imageUrl: s.source_image_url,
@@ -77,13 +72,13 @@ export async function POST(req: Request) {
       visualSampleUrls: samples,
     });
 
-    await supabase
-      .from("tours")
-      .update({
+    await prisma.tours.update({
+      where: { id: tour.id },
+      data: {
         ai_description: description,
-        ai_description_generated_at: new Date().toISOString(),
-      })
-      .eq("id", tour.id);
+        ai_description_generated_at: new Date(),
+      },
+    });
 
     return NextResponse.json({ description });
   } catch (err) {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import type { Tour } from "./types";
 import { rowToTour, tourToRows, type TourWithRelations } from "./db-mapper";
 import { dehydrateImageUrl } from "@/lib/r2/resolve";
@@ -10,23 +10,32 @@ import { authorizeTourAccess } from "./access";
 
 // loadTour ---------------------------------------------------------------
 //
-// Used by the editor route. RLS keeps it scoped to the caller's team — we
-// query by id alone and rely on policy denial for cross-team attempts.
+// Used by the editor route. There is no RLS on InMotion Postgres, so we must
+// scope this explicitly: authorizeTourAccess confirms the caller is a platform
+// admin or a member of the tour's own team before we return any data.
 
 export async function loadTour(tourId: string): Promise<Tour | null> {
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tours")
-    // Disambiguate the embed — see app/editor/[id]/page.tsx for the why.
-    .select("*, scenes!scenes_tour_id_fkey(*, hotspots(*))")
-    .eq("id", tourId)
-    .maybeSingle();
-
-  if (error) {
-    throw new Error(error.message);
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) {
+    if (access.status === 404) return null;
+    throw new Error(access.error);
   }
+
+  const data = await prisma.tours.findUnique({
+    where: { id: tourId },
+    include: {
+      // Disambiguate the dual FK — the tour's own scenes, with their hotspots.
+      scenes_scenes_tour_idTotours: { include: { hotspots: true } },
+    },
+  });
+
   if (!data) return null;
-  return rowToTour(data as unknown as TourWithRelations);
+  // Map the Prisma relation name onto the `scenes` property the mapper expects.
+  const shaped = {
+    ...data,
+    scenes: data.scenes_scenes_tour_idTotours,
+  };
+  return rowToTour(shaped as unknown as TourWithRelations);
 }
 
 // saveTour ---------------------------------------------------------------
@@ -46,7 +55,6 @@ export async function saveTour(tour: Tour): Promise<{ ok: true } | { ok: false; 
   const access = await authorizeTourAccess(tour.id);
   if (!access.ok) return { ok: false, error: access.error };
   const teamId = access.teamId;
-  const supabase = await createClient();
 
   // Convert any presigned R2 URLs the client round-tripped back to bare
   // `r2:<key>` refs before persisting. The page renderer re-signs on read.
@@ -60,53 +68,56 @@ export async function saveTour(tour: Tour): Promise<{ ok: true } | { ok: false; 
 
   const { tourRow, scenes, hotspots } = tourToRows(dehydrated, teamId);
 
-  // 1) Tour metadata.
-  const { error: tourErr } = await supabase
-    .from("tours")
-    .update(tourRow)
-    .eq("id", tour.id);
-  if (tourErr) return { ok: false, error: tourErr.message };
+  try {
+    // 1) Tour metadata. Scoped by id; authorizeTourAccess already proved the
+    //    caller may write this tour.
+    await prisma.tours.update({
+      where: { id: tour.id },
+      // tourRow uses snake_case column names, which Prisma accepts directly.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: tourRow as any,
+    });
 
-  // 2) Hotspots first (children of scenes). Easier to wipe + recreate than
-  //    diff per row, and avoids FK violations during scene replacement.
-  const sceneIds = scenes.map((s) => s.id);
-  if (sceneIds.length > 0) {
-    const { error: hsDelErr } = await supabase
-      .from("hotspots")
-      .delete()
-      .in("scene_id", sceneIds);
-    if (hsDelErr) return { ok: false, error: hsDelErr.message };
-  }
+    // 2) Hotspots first (children of scenes). Easier to wipe + recreate than
+    //    diff per row, and avoids FK violations during scene replacement.
+    const sceneIds = scenes.map((s) => s.id);
+    if (sceneIds.length > 0) {
+      await prisma.hotspots.deleteMany({ where: { scene_id: { in: sceneIds } } });
+    }
 
-  // 3) Scenes — upsert by id so existing scene rows keep created_at.
-  if (scenes.length > 0) {
-    const sceneRows = scenes.map((s) => ({ ...s, tour_id: tour.id }));
-    const { error: sceneErr } = await supabase
-      .from("scenes")
-      .upsert(sceneRows, { onConflict: "id" });
-    if (sceneErr) return { ok: false, error: sceneErr.message };
+    // 3) Scenes — upsert by id so existing scene rows keep created_at.
+    if (scenes.length > 0) {
+      for (const s of scenes) {
+        // SceneUpsert uses snake_case column names; floor_plan_position is a
+        // nullable Json column, so cast to bypass Prisma's JsonNull typing.
+        const sceneData = { ...s, tour_id: tour.id };
+        await prisma.scenes.upsert({
+          where: { id: s.id },
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          create: sceneData as any,
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          update: sceneData as any,
+        });
+      }
 
-    // Drop scenes that are no longer in the tour. Only delete scenes that
-    // belong to THIS tour and aren't in the new id set.
-    const { error: orphanErr } = await supabase
-      .from("scenes")
-      .delete()
-      .eq("tour_id", tour.id)
-      .not("id", "in", `(${sceneIds.map((id) => `"${id}"`).join(",")})`);
-    if (orphanErr) return { ok: false, error: orphanErr.message };
-  } else {
-    // Tour with no scenes — clear them all.
-    const { error: clearErr } = await supabase
-      .from("scenes")
-      .delete()
-      .eq("tour_id", tour.id);
-    if (clearErr) return { ok: false, error: clearErr.message };
-  }
+      // Drop scenes that are no longer in the tour. Only delete scenes that
+      // belong to THIS tour and aren't in the new id set.
+      await prisma.scenes.deleteMany({
+        where: { tour_id: tour.id, id: { notIn: sceneIds } },
+      });
+    } else {
+      // Tour with no scenes — clear them all.
+      await prisma.scenes.deleteMany({ where: { tour_id: tour.id } });
+    }
 
-  // 4) Hotspots — fresh insert (we deleted them in step 2).
-  if (hotspots.length > 0) {
-    const { error: hsInsErr } = await supabase.from("hotspots").insert(hotspots);
-    if (hsInsErr) return { ok: false, error: hsInsErr.message };
+    // 4) Hotspots — fresh insert (we deleted them in step 2).
+    if (hotspots.length > 0) {
+      // HotspotUpsert mirrors the column names (type enum + Json payload).
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await prisma.hotspots.createMany({ data: hotspots as any });
+    }
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Save failed." };
   }
 
   revalidatePath(`/editor/${tour.id}`);
@@ -147,13 +158,11 @@ export async function updateTourMeta(params: {
 
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) return { ok: false, error: access.error };
-  const supabase = await createClient();
 
-  const { data: existing } = await supabase
-    .from("tours")
-    .select("id, slug")
-    .eq("id", tourId)
-    .maybeSingle();
+  const existing = await prisma.tours.findUnique({
+    where: { id: tourId },
+    select: { id: true, slug: true },
+  });
   if (!existing) return { ok: false, error: "Tour not found." };
 
   // Compute a fresh slug. Keep the existing one if it already matches the
@@ -166,12 +175,12 @@ export async function updateTourMeta(params: {
     // re-running with the same title doesn't ladder up suffixes.
     for (let i = 1; i < 50; i++) {
       const candidate = i === 1 ? baseSlug : `${baseSlug}-${i}`;
-      const { data: clash } = await supabase
-        .from("tours")
-        .select("id")
-        .eq("slug", candidate)
-        .neq("id", tourId)
-        .maybeSingle();
+      // Slug is globally unique, so this uniqueness probe is intentionally
+      // cross-tenant — it just needs a free slug.
+      const clash = await prisma.tours.findFirst({
+        where: { slug: candidate, id: { not: tourId } },
+        select: { id: true },
+      });
       if (!clash) {
         nextSlug = candidate;
         break;
@@ -184,11 +193,14 @@ export async function updateTourMeta(params: {
     }
   }
 
-  const { error } = await supabase
-    .from("tours")
-    .update({ title, property_address: propertyAddress, slug: nextSlug })
-    .eq("id", tourId);
-  if (error) return { ok: false, error: error.message };
+  try {
+    await prisma.tours.update({
+      where: { id: tourId },
+      data: { title, property_address: propertyAddress, slug: nextSlug },
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Update failed." };
+  }
 
   revalidatePath(`/editor/${tourId}`);
   revalidatePath(`/t/${existing.slug}`);
@@ -205,12 +217,7 @@ export async function setTourStatus(
 ): Promise<void> {
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) throw new Error(access.error);
-  const supabase = await createClient();
-  const { error } = await supabase
-    .from("tours")
-    .update({ status })
-    .eq("id", tourId);
-  if (error) throw new Error(error.message);
+  await prisma.tours.update({ where: { id: tourId }, data: { status } });
   revalidatePath(`/dashboard`);
   revalidatePath(`/editor/${tourId}`);
 }
@@ -220,9 +227,7 @@ export async function setTourStatus(
 export async function deleteTour(tourId: string): Promise<void> {
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) throw new Error(access.error);
-  const supabase = await createClient();
-  const { error } = await supabase.from("tours").delete().eq("id", tourId);
-  if (error) throw new Error(error.message);
+  await prisma.tours.delete({ where: { id: tourId } });
   revalidatePath("/dashboard");
   redirect("/dashboard");
 }

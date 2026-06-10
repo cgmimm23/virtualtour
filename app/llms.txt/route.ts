@@ -3,7 +3,7 @@
 // AI agents can read instead of crawling the whole site.
 
 import { ARTICLES_META } from "@/app/(marketing)/guide/_content/meta";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { getPricingTiers } from "@/lib/pricing";
 
 const BASE_URL =
@@ -17,13 +17,11 @@ export async function GET() {
   // Pull a few published tours to surface as concrete examples.
   let exampleTours: Array<{ slug: string; title: string }> = [];
   try {
-    const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("tours")
-      .select("slug, title")
-      .eq("status", "published")
-      .limit(5);
-    exampleTours = data ?? [];
+    exampleTours = await prisma.tours.findMany({
+      where: { status: "published" },
+      select: { slug: true, title: true },
+      take: 5,
+    });
   } catch {
     exampleTours = [{ slug: "kremmen-place", title: "Kremmen Place" }];
   }

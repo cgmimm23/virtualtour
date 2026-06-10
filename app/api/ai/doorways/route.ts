@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { detectDoorways } from "@/lib/ai/doorways";
 import { getUser, isPlatformAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 const Body = z.object({ sceneId: z.string().uuid(), imageUrl: z.string().min(1) });
 
@@ -25,24 +25,16 @@ export async function POST(req: Request) {
   // or platform admin). Service-role lookup, then check membership.
   const admin = await isPlatformAdmin();
   if (!admin) {
-    const supabase = createAdminClient();
-    const { data: scene } = await supabase
-      .from("scenes")
-      .select("tour:tours(team_id)")
-      .eq("id", parsed.data.sceneId)
-      .maybeSingle();
-    const tour = scene?.tour
-      ? Array.isArray(scene.tour)
-        ? scene.tour[0]
-        : scene.tour
-      : null;
+    const scene = await prisma.scenes.findUnique({
+      where: { id: parsed.data.sceneId },
+      select: { tours_scenes_tour_idTotours: { select: { team_id: true } } },
+    });
+    const tour = scene?.tours_scenes_tour_idTotours ?? null;
     if (!tour) return NextResponse.json({ error: "scene not found" }, { status: 404 });
-    const { data: membership } = await supabase
-      .from("team_members")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("team_id", tour.team_id)
-      .maybeSingle();
+    const membership = await prisma.team_members.findUnique({
+      where: { team_id_user_id: { team_id: tour.team_id, user_id: user.id } },
+      select: { role: true },
+    });
     if (!membership) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }

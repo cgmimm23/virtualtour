@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { scoreLead } from "@/lib/ai/lead-score";
 import { getUser, isPlatformAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 const Body = z.object({ leadId: z.string().uuid() });
 
@@ -18,47 +18,47 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: parsed.error.issues[0]?.message ?? "bad input" }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-  const { data: lead } = await supabase
-    .from("leads")
-    .select(
-      "id, name, email, phone, preferred_time, source, scenes_viewed, duration_ms, captured_at, tour_id",
-    )
-    .eq("id", parsed.data.leadId)
-    .maybeSingle();
+  const lead = await prisma.leads.findUnique({
+    where: { id: parsed.data.leadId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      phone: true,
+      preferred_time: true,
+      source: true,
+      scenes_viewed: true,
+      duration_ms: true,
+      captured_at: true,
+      tour_id: true,
+    },
+  });
   if (!lead) return NextResponse.json({ error: "lead not found" }, { status: 404 });
 
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("team_id, details, status")
-    .eq("id", lead.tour_id)
-    .maybeSingle();
+  const tour = await prisma.tours.findUnique({
+    where: { id: lead.tour_id },
+    select: { team_id: true, details: true, status: true },
+  });
   if (!tour) return NextResponse.json({ error: "tour not found" }, { status: 404 });
 
   const admin = await isPlatformAdmin();
   if (!admin) {
-    const { data: membership } = await supabase
-      .from("team_members")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("team_id", tour.team_id)
-      .maybeSingle();
+    const membership = await prisma.team_members.findUnique({
+      where: { team_id_user_id: { team_id: tour.team_id, user_id: user.id } },
+      select: { role: true },
+    });
     if (!membership) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   }
 
-  const { count: totalScenes } = await supabase
-    .from("scenes")
-    .select("id", { count: "exact", head: true })
-    .eq("tour_id", lead.tour_id);
+  const totalScenes = await prisma.scenes.count({
+    where: { tour_id: lead.tour_id },
+  });
 
-  const { count: priorLeads } = await supabase
-    .from("leads")
-    .select("id", { count: "exact", head: true })
-    .eq("tour_id", lead.tour_id)
-    .eq("email", lead.email)
-    .neq("id", lead.id);
+  const priorLeads = await prisma.leads.count({
+    where: { tour_id: lead.tour_id, email: lead.email, id: { not: lead.id } },
+  });
 
   try {
     const details =
@@ -69,24 +69,24 @@ export async function POST(req: Request) {
       name: lead.name,
       email: lead.email,
       phone: lead.phone,
-      preferredTime: lead.preferred_time,
+      preferredTime: lead.preferred_time ? lead.preferred_time.toISOString() : null,
       source: lead.source,
       scenesViewed: lead.scenes_viewed ?? 0,
       totalScenes: totalScenes ?? 0,
       durationMs: lead.duration_ms ?? 0,
-      capturedAt: lead.captured_at,
+      capturedAt: lead.captured_at.toISOString(),
       priorLeadsForEmail: priorLeads ?? 0,
       property: { listPrice: details?.listPrice, status: tour.status },
     });
 
-    await supabase
-      .from("leads")
-      .update({
+    await prisma.leads.update({
+      where: { id: lead.id },
+      data: {
         ai_score: result.score,
         ai_reason: result.reason,
-        ai_scored_at: new Date().toISOString(),
-      })
-      .eq("id", lead.id);
+        ai_scored_at: new Date(),
+      },
+    });
 
     return NextResponse.json(result);
   } catch (err) {

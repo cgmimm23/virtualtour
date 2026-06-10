@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getUser } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { AcceptInviteButton } from "./controls";
 
 export const dynamic = "force-dynamic";
@@ -16,13 +16,22 @@ interface PageProps {
 
 export default async function AcceptInvitePage({ params }: PageProps) {
   const { token } = await params;
-  const admin = createAdminClient();
 
-  const { data: invite } = await admin
-    .from("team_invites")
-    .select("id, team_id, email, role, expires_at, accepted_at, team:teams(name)")
-    .eq("token", token)
-    .maybeSingle();
+  // Looked up by the unique token (the bearer secret). No team scope: the
+  // visitor isn't necessarily a member yet — identity is proven by the email
+  // match below before they can accept.
+  const invite = await prisma.team_invites.findUnique({
+    where: { token },
+    select: {
+      id: true,
+      team_id: true,
+      email: true,
+      role: true,
+      expires_at: true,
+      accepted_at: true,
+      teams: { select: { name: true } },
+    },
+  });
 
   if (!invite) {
     return (
@@ -32,7 +41,7 @@ export default async function AcceptInvitePage({ params }: PageProps) {
     );
   }
 
-  const teamName = (Array.isArray(invite.team) ? invite.team[0] : invite.team)?.name ?? "the team";
+  const teamName = invite.teams?.name ?? "the team";
 
   if (invite.accepted_at) {
     return (

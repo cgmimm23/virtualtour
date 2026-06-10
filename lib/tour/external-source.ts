@@ -7,7 +7,7 @@
 import { revalidatePath } from "next/cache";
 import { parse } from "node-html-parser";
 import { authorizeTourAccess } from "./access";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 
 const MAX_SOURCES = 3;
 const MAX_CONTENT_CHARS = 5000; // hard cap on stored content
@@ -54,14 +54,12 @@ export async function refreshExternalSource(input: {
     };
   }
 
-  const supabase = await createClient();
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("external_sources")
-    .eq("id", input.tourId)
-    .maybeSingle();
+  const tour = await prisma.tours.findUnique({
+    where: { id: input.tourId },
+    select: { external_sources: true },
+  });
   const existing: SourceEntry[] = Array.isArray(tour?.external_sources)
-    ? (tour!.external_sources as SourceEntry[])
+    ? (tour!.external_sources as unknown as SourceEntry[])
     : [];
 
   // Replace matching URL, else append; cap total at MAX_SOURCES.
@@ -85,11 +83,15 @@ export async function refreshExternalSource(input: {
     next = [...existing, entry];
   }
 
-  const { error } = await supabase
-    .from("tours")
-    .update({ external_sources: next })
-    .eq("id", input.tourId);
-  if (error) return { ok: false, error: error.message };
+  try {
+    await prisma.tours.update({
+      where: { id: input.tourId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { external_sources: next as any },
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Update failed." };
+  }
 
   revalidatePath(`/editor/${input.tourId}`);
   return {
@@ -106,23 +108,25 @@ export async function removeExternalSource(input: {
   const access = await authorizeTourAccess(input.tourId);
   if (!access.ok) return { ok: false, error: access.error };
 
-  const supabase = await createClient();
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("external_sources")
-    .eq("id", input.tourId)
-    .maybeSingle();
+  const tour = await prisma.tours.findUnique({
+    where: { id: input.tourId },
+    select: { external_sources: true },
+  });
   const existing: SourceEntry[] = Array.isArray(tour?.external_sources)
-    ? (tour!.external_sources as SourceEntry[])
+    ? (tour!.external_sources as unknown as SourceEntry[])
     : [];
   const next = existing.filter((s) => s.url !== input.url);
   if (next.length === existing.length) return { ok: true }; // no-op
 
-  const { error } = await supabase
-    .from("tours")
-    .update({ external_sources: next })
-    .eq("id", input.tourId);
-  if (error) return { ok: false, error: error.message };
+  try {
+    await prisma.tours.update({
+      where: { id: input.tourId },
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      data: { external_sources: next as any },
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Update failed." };
+  }
 
   revalidatePath(`/editor/${input.tourId}`);
   return { ok: true };

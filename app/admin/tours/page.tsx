@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -19,45 +19,50 @@ interface AdminTourRow {
 }
 
 async function loadTours(): Promise<AdminTourRow[]> {
-  const supabase = createAdminClient();
-  const [{ data: tours }, { data: scenes }, { data: hotspots }, { data: leads }] = await Promise.all([
-    supabase
-      .from("tours")
-      .select("id, slug, title, status, view_count, created_at, updated_at, team:teams(name, plan)")
-      .order("created_at", { ascending: false })
-      .limit(200),
-    supabase.from("scenes").select("tour_id"),
-    supabase.from("hotspots").select("scene_id, scene:scenes(tour_id)"),
-    supabase.from("leads").select("tour_id"),
+  const [tours, hotspots] = await Promise.all([
+    prisma.tours.findMany({
+      select: {
+        id: true,
+        slug: true,
+        title: true,
+        status: true,
+        view_count: true,
+        created_at: true,
+        updated_at: true,
+        teams: { select: { name: true, plan: true } },
+        _count: {
+          select: { scenes_scenes_tour_idTotours: true, leads: true },
+        },
+      },
+      orderBy: { created_at: "desc" },
+      take: 200,
+    }),
+    prisma.hotspots.findMany({
+      select: { scenes: { select: { tour_id: true } } },
+    }),
   ]);
 
-  const sceneCount = new Map<string, number>();
-  for (const s of scenes ?? []) sceneCount.set(s.tour_id, (sceneCount.get(s.tour_id) ?? 0) + 1);
-
   const hotspotCount = new Map<string, number>();
-  for (const h of hotspots ?? []) {
-    const scene = Array.isArray(h.scene) ? h.scene[0] : h.scene;
-    if (scene?.tour_id) hotspotCount.set(scene.tour_id, (hotspotCount.get(scene.tour_id) ?? 0) + 1);
+  for (const h of hotspots) {
+    const tourId = h.scenes?.tour_id;
+    if (tourId) hotspotCount.set(tourId, (hotspotCount.get(tourId) ?? 0) + 1);
   }
 
-  const leadCount = new Map<string, number>();
-  for (const l of leads ?? []) leadCount.set(l.tour_id, (leadCount.get(l.tour_id) ?? 0) + 1);
-
-  return (tours ?? []).map((t) => {
-    const team = Array.isArray(t.team) ? t.team[0] : t.team;
+  return tours.map((t) => {
+    const team = t.teams;
     return {
       id: t.id,
       slug: t.slug,
       title: t.title,
       status: t.status,
       viewCount: t.view_count ?? 0,
-      createdAt: t.created_at,
-      updatedAt: t.updated_at,
+      createdAt: t.created_at.toISOString(),
+      updatedAt: t.updated_at.toISOString(),
       teamName: team?.name ?? "—",
       teamPlan: team?.plan ?? "—",
-      scenesCount: sceneCount.get(t.id) ?? 0,
+      scenesCount: t._count.scenes_scenes_tour_idTotours,
       hotspotsCount: hotspotCount.get(t.id) ?? 0,
-      leadsCount: leadCount.get(t.id) ?? 0,
+      leadsCount: t._count.leads,
     };
   });
 }

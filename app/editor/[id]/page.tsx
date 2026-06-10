@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import { rowToTour, type TourWithRelations } from "@/lib/tour/db-mapper";
 import { resolveTourImageUrls } from "@/lib/r2/resolve";
 import { requireTourAccess } from "@/lib/tour/access";
@@ -14,29 +14,33 @@ export const metadata = { title: "Edit tour — Tourly" };
 
 export default async function EditTourPage({ params }: PageProps) {
   const { id } = await params;
-  // requireTourAccess gates on either team membership OR platform admin —
-  // matches the RLS policy in 0007 so admins can edit any tour.
+  // requireTourAccess gates on either team membership OR platform admin (it
+  // loads the tour and asserts the caller is on its team, or is a platform
+  // admin). That call IS the access scope for this load — so the findUnique
+  // below is by id alone, matching the prior behavior where admins can edit
+  // any team's tour. Removing it would drop the membership-or-admin check.
   await requireTourAccess(id);
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tours")
-    // Disambiguate the embed: tours has two FKs touching scenes
-    // (scenes.tour_id → tours.id, and tours.cover_scene_id → scenes.id).
-    // The `!scenes_tour_id_fkey` hint tells PostgREST which relationship
-    // the embed means. No team_id filter here — RLS already enforces
-    // membership-or-admin, and we don't want to lock admins out of
-    // other teams' tours.
-    .select("*, scenes!scenes_tour_id_fkey(*, hotspots(*))")
-    .eq("id", id)
-    .maybeSingle();
+  // Disambiguate the relation: tours has two FKs touching scenes
+  // (scenes.tour_id → tours.id, and tours.cover_scene_id → scenes.id).
+  // `scenes_scenes_tour_idTotours` is the scenes.tour_id → tours.id side.
+  const data = await prisma.tours.findUnique({
+    where: { id },
+    include: {
+      scenes_scenes_tour_idTotours: { include: { hotspots: true } },
+    },
+  });
 
-  if (error) throw new Error(error.message);
   if (!data) notFound();
 
-  const tour = await resolveTourImageUrls(
-    rowToTour(data as unknown as TourWithRelations),
-  );
+  // rowToTour / TourWithRelations expect the relation under `scenes`; alias
+  // the Prisma relation property to that name before mapping.
+  const tourRow = {
+    ...data,
+    scenes: data.scenes_scenes_tour_idTotours,
+  } as unknown as TourWithRelations;
+
+  const tour = await resolveTourImageUrls(rowToTour(tourRow));
 
   return (
     <Suspense

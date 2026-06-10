@@ -13,7 +13,8 @@ import { NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { getStripe } from "@/lib/stripe/client";
 import { getSecret } from "@/lib/secrets";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
+import type { Prisma } from "@prisma/client";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -68,15 +69,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `signature verify failed: ${msg}` }, { status: 400 });
   }
 
-  const supabase = createAdminClient();
-
   // Dedupe via stripe_event_id unique index. If the event was already
   // recorded, return 200 without re-processing.
-  const { data: existing } = await supabase
-    .from("billing_events")
-    .select("id")
-    .eq("stripe_event_id", event.id)
-    .maybeSingle();
+  const existing = await prisma.billing_events.findUnique({
+    where: { stripe_event_id: event.id },
+    select: { id: true },
+  });
   if (existing) {
     return NextResponse.json({ ok: true, dedup: true });
   }
@@ -89,13 +87,18 @@ export async function POST(req: Request) {
           ? null
           : session.metadata?.team_id ?? null;
         if (teamId) {
-          await supabase.from("billing_events").insert({
-            team_id: teamId,
-            type: "checkout_completed",
-            source: "webhook",
-            stripe_event_id: event.id,
-            stripe_object_id: typeof session.id === "string" ? session.id : null,
-            metadata: { mode: session.mode, customer: session.customer },
+          await prisma.billing_events.create({
+            data: {
+              team_id: teamId,
+              type: "checkout_completed",
+              source: "webhook",
+              stripe_event_id: event.id,
+              stripe_object_id: typeof session.id === "string" ? session.id : null,
+              metadata: {
+                mode: session.mode,
+                customer: typeof session.customer === "string" ? session.customer : session.customer?.id ?? null,
+              } as Prisma.InputJsonValue,
+            },
           });
         }
         break;
@@ -108,7 +111,7 @@ export async function POST(req: Request) {
         const teamId = sub.metadata?.team_id ?? null;
         const targetTeam = teamId
           ? teamId
-          : await teamIdFromCustomer(supabase, sub.customer);
+          : await teamIdFromCustomer(sub.customer);
         if (!targetTeam) break;
 
         const status = sub.status;
@@ -119,7 +122,7 @@ export async function POST(req: Request) {
         const itemCpe = sub.items?.data?.[0]?.current_period_end;
         const cpe = itemCpe ?? (sub as unknown as { current_period_end?: number }).current_period_end;
         const currentPeriodEnd =
-          typeof cpe === "number" ? new Date(cpe * 1000).toISOString() : null;
+          typeof cpe === "number" ? new Date(cpe * 1000) : null;
 
         let nextPlan: Plan | null = planFromMetadata(sub.metadata);
         if (!nextPlan) {
@@ -127,43 +130,44 @@ export async function POST(req: Request) {
           nextPlan = await planFromPriceId(priceId);
         }
 
-        const { data: prev } = await supabase
-          .from("teams")
-          .select("plan")
-          .eq("id", targetTeam)
-          .maybeSingle();
+        const prev = await prisma.teams.findUnique({
+          where: { id: targetTeam },
+          select: { plan: true },
+        });
 
-        const planUpdate =
+        const planUpdate: Plan =
           event.type === "customer.subscription.deleted"
             ? "trial"
             : nextPlan ?? prev?.plan ?? "trial";
 
-        await supabase
-          .from("teams")
-          .update({
+        await prisma.teams.update({
+          where: { id: targetTeam },
+          data: {
             plan: planUpdate,
             stripe_subscription_id:
               event.type === "customer.subscription.deleted" ? null : sub.id,
             stripe_status: status,
             cancel_at_period_end: cancel,
             current_period_end: currentPeriodEnd,
-          })
-          .eq("id", targetTeam);
+          },
+        });
 
-        await supabase.from("billing_events").insert({
-          team_id: targetTeam,
-          type:
-            event.type === "customer.subscription.created"
-              ? "subscription_created"
-              : event.type === "customer.subscription.deleted"
-                ? "subscription_deleted"
-                : "subscription_updated",
-          source: "webhook",
-          from_plan: prev?.plan ?? null,
-          to_plan: planUpdate,
-          stripe_event_id: event.id,
-          stripe_object_id: sub.id,
-          metadata: { status, cancel_at_period_end: cancel },
+        await prisma.billing_events.create({
+          data: {
+            team_id: targetTeam,
+            type:
+              event.type === "customer.subscription.created"
+                ? "subscription_created"
+                : event.type === "customer.subscription.deleted"
+                  ? "subscription_deleted"
+                  : "subscription_updated",
+            source: "webhook",
+            from_plan: prev?.plan ?? null,
+            to_plan: planUpdate,
+            stripe_event_id: event.id,
+            stripe_object_id: sub.id,
+            metadata: { status, cancel_at_period_end: cancel },
+          },
         });
         break;
       }
@@ -171,20 +175,22 @@ export async function POST(req: Request) {
       case "invoice.paid":
       case "invoice.payment_failed": {
         const invoice = event.data.object as Stripe.Invoice;
-        const teamId = await teamIdFromCustomer(supabase, invoice.customer);
+        const teamId = await teamIdFromCustomer(invoice.customer);
         if (!teamId) break;
-        await supabase.from("billing_events").insert({
-          team_id: teamId,
-          type: event.type === "invoice.paid" ? "invoice_paid" : "invoice_payment_failed",
-          source: "webhook",
-          amount_cents: invoice.amount_paid ?? invoice.amount_due ?? 0,
-          currency: invoice.currency ?? "usd",
-          stripe_event_id: event.id,
-          stripe_object_id: invoice.id,
-          metadata: {
-            number: invoice.number,
-            hosted_invoice_url: invoice.hosted_invoice_url,
-            attempt_count: invoice.attempt_count,
+        await prisma.billing_events.create({
+          data: {
+            team_id: teamId,
+            type: event.type === "invoice.paid" ? "invoice_paid" : "invoice_payment_failed",
+            source: "webhook",
+            amount_cents: invoice.amount_paid ?? invoice.amount_due ?? 0,
+            currency: invoice.currency ?? "usd",
+            stripe_event_id: event.id,
+            stripe_object_id: invoice.id ?? null,
+            metadata: {
+              number: invoice.number,
+              hosted_invoice_url: invoice.hosted_invoice_url,
+              attempt_count: invoice.attempt_count,
+            },
           },
         });
         break;
@@ -208,15 +214,15 @@ export async function POST(req: Request) {
 }
 
 async function teamIdFromCustomer(
-  supabase: ReturnType<typeof createAdminClient>,
   customer: string | Stripe.Customer | Stripe.DeletedCustomer | null,
 ): Promise<string | null> {
   if (!customer) return null;
   const id = typeof customer === "string" ? customer : customer.id;
-  const { data } = await supabase
-    .from("teams")
-    .select("id")
-    .eq("stripe_customer_id", id)
-    .maybeSingle();
-  return data?.id ?? null;
+  // Cross-team lookup is intentional: the webhook is unauthenticated and
+  // resolves the owning team by the Stripe customer id.
+  const team = await prisma.teams.findFirst({
+    where: { stripe_customer_id: id },
+    select: { id: true },
+  });
+  return team?.id ?? null;
 }

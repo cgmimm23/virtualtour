@@ -16,7 +16,7 @@
 
 import "server-only";
 import { getUser, isPlatformAdmin, requireUser, requireActiveTeam } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 
 export type TourAccessOk = {
   ok: true;
@@ -43,13 +43,10 @@ export async function authorizeTourAccess(tourId: string): Promise<TourAccess> {
   const user = await getUser();
   if (!user) return { ok: false, error: "not signed in", status: 401 };
 
-  const supabase = await createClient();
-  const { data: tour, error } = await supabase
-    .from("tours")
-    .select("id, team_id")
-    .eq("id", tourId)
-    .maybeSingle();
-  if (error) return { ok: false, error: error.message };
+  const tour = await prisma.tours.findUnique({
+    where: { id: tourId },
+    select: { id: true, team_id: true },
+  });
   if (!tour) return { ok: false, error: "Tour not found.", status: 404 };
 
   const admin = await isPlatformAdmin();

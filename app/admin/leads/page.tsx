@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -17,26 +17,38 @@ interface AdminLeadRow {
 }
 
 async function loadLeads(): Promise<AdminLeadRow[]> {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("leads")
-    .select(
-      "id, email, name, phone, source, captured_at, agent_notified_at, tour:tours(slug, title, team:teams(name))",
-    )
-    .order("captured_at", { ascending: false })
-    .limit(500);
+  const data = await prisma.leads.findMany({
+    select: {
+      id: true,
+      email: true,
+      name: true,
+      phone: true,
+      source: true,
+      captured_at: true,
+      agent_notified_at: true,
+      tours: {
+        select: {
+          slug: true,
+          title: true,
+          teams: { select: { name: true } },
+        },
+      },
+    },
+    orderBy: { captured_at: "desc" },
+    take: 500,
+  });
 
-  return (data ?? []).map((l) => {
-    const tour = Array.isArray(l.tour) ? l.tour[0] : l.tour;
-    const team = tour && (Array.isArray(tour.team) ? tour.team[0] : tour.team);
+  return data.map((l) => {
+    const tour = l.tours;
+    const team = tour?.teams;
     return {
       id: l.id,
       email: l.email,
       name: l.name ?? null,
       phone: l.phone ?? null,
       source: l.source,
-      capturedAt: l.captured_at,
-      agentNotifiedAt: l.agent_notified_at ?? null,
+      capturedAt: l.captured_at.toISOString(),
+      agentNotifiedAt: l.agent_notified_at ? l.agent_notified_at.toISOString() : null,
       tourSlug: tour?.slug ?? "(unknown)",
       tourTitle: tour?.title ?? "(unknown)",
       teamName: team?.name ?? "(unknown)",

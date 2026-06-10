@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -16,28 +16,23 @@ interface TeamRow {
 }
 
 async function loadTeams(): Promise<TeamRow[]> {
-  const supabase = createAdminClient();
-  const [{ data: teams }, { data: members }, { data: tours }] = await Promise.all([
-    supabase.from("teams").select("*").order("created_at", { ascending: false }),
-    supabase.from("team_members").select("team_id"),
-    supabase.from("tours").select("team_id"),
-  ]);
+  const teams = await prisma.teams.findMany({
+    orderBy: { created_at: "desc" },
+    include: {
+      _count: { select: { team_members: true, tours: true } },
+    },
+  });
 
-  const memberCount = new Map<string, number>();
-  for (const m of members ?? []) memberCount.set(m.team_id, (memberCount.get(m.team_id) ?? 0) + 1);
-  const tourCount = new Map<string, number>();
-  for (const t of tours ?? []) tourCount.set(t.team_id, (tourCount.get(t.team_id) ?? 0) + 1);
-
-  return (teams ?? []).map((t) => ({
+  return teams.map((t) => ({
     id: t.id,
     name: t.name,
     slug: t.slug,
     plan: t.plan,
     stripeCustomerId: t.stripe_customer_id ?? null,
     stripeSubscriptionId: t.stripe_subscription_id ?? null,
-    createdAt: t.created_at,
-    memberCount: memberCount.get(t.id) ?? 0,
-    tourCount: tourCount.get(t.id) ?? 0,
+    createdAt: t.created_at.toISOString(),
+    memberCount: t._count.team_members,
+    tourCount: t._count.tours,
   }));
 }
 

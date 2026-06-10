@@ -5,11 +5,13 @@ import { resetPasswordAction, type ResetState } from "./actions";
 
 const initial: ResetState = {};
 
-export function ResetPasswordForm() {
+export function ResetPasswordForm({ token, email }: { token: string; email: string }) {
   const [state, formAction, pending] = useActionState(resetPasswordAction, initial);
 
   return (
     <form action={formAction} className="space-y-4">
+      <input type="hidden" name="token" value={token} />
+      <input type="hidden" name="email" value={email} />
       <div>
         <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-neutral-500">
           New password

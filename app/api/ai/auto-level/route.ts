@@ -8,7 +8,7 @@
 
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import { requireActiveTeam, isPlatformAdmin } from "@/lib/auth";
 import { detectHorizonTilt } from "@/lib/ai/auto-level";
 import { revalidatePath } from "next/cache";
@@ -31,17 +31,19 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
 
-  const supabase = await createClient();
   // Scope the scene to the caller's tour. Admin bypasses team check.
-  const { data: scene } = await supabase
-    .from("scenes")
-    .select("id, tour_id, tours:tours!scenes_tour_id_fkey(team_id)")
-    .eq("id", parsed.data.sceneId)
-    .maybeSingle();
+  const scene = await prisma.scenes.findUnique({
+    where: { id: parsed.data.sceneId },
+    select: {
+      id: true,
+      tour_id: true,
+      tours_scenes_tour_idTotours: { select: { team_id: true } },
+    },
+  });
   if (!scene) {
     return NextResponse.json({ ok: false, error: "scene not found" }, { status: 404 });
   }
-  const sceneTeamId = (Array.isArray(scene.tours) ? scene.tours[0] : scene.tours)?.team_id;
+  const sceneTeamId = scene.tours_scenes_tour_idTotours?.team_id;
   if (!admin && sceneTeamId !== team.id) {
     return NextResponse.json({ ok: false, error: "forbidden" }, { status: 403 });
   }
@@ -57,12 +59,16 @@ export async function POST(req: Request) {
     );
   }
 
-  const { error: updErr } = await supabase
-    .from("scenes")
-    .update({ initial_roll: level.roll, initial_pitch: level.pitch })
-    .eq("id", parsed.data.sceneId);
-  if (updErr) {
-    return NextResponse.json({ ok: false, error: updErr.message }, { status: 500 });
+  try {
+    await prisma.scenes.update({
+      where: { id: parsed.data.sceneId },
+      data: { initial_roll: level.roll, initial_pitch: level.pitch },
+    });
+  } catch (err) {
+    return NextResponse.json(
+      { ok: false, error: err instanceof Error ? err.message : "update failed" },
+      { status: 500 },
+    );
   }
 
   revalidatePath(`/editor/${scene.tour_id}`);

@@ -1,17 +1,43 @@
 "use client";
 
-import { useActionState } from "react";
-import { signupAction } from "./actions";
-import type { AuthFormState } from "../login/actions";
-
-const initial: AuthFormState = {};
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
+import { createAccount } from "./actions";
 
 export function SignupForm({ plan }: { plan?: string }) {
-  const [state, formAction, pending] = useActionState(signupAction, initial);
+  const router = useRouter();
+  const [error, setError] = useState<string | undefined>();
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(undefined);
+    const fd = new FormData(e.currentTarget);
+    const email = String(fd.get("email") ?? "").trim();
+    const password = String(fd.get("password") ?? "");
+
+    const result = await createAccount({ email, password, plan });
+    if (result.error || !result.ok) {
+      setPending(false);
+      setError(result.error ?? "Could not create account.");
+      return;
+    }
+
+    // Account created (and the DB trigger provisioned the team) — sign in.
+    const res = await signIn("credentials", { redirect: false, email, password });
+    if (res?.error) {
+      setPending(false);
+      setError("Account created, but sign-in failed. Try logging in.");
+      return;
+    }
+    router.push(result.redirectTo ?? "/dashboard");
+    router.refresh();
+  }
 
   return (
-    <form action={formAction} className="space-y-4">
-      {plan ? <input type="hidden" name="plan" value={plan} /> : null}
+    <form onSubmit={onSubmit} className="space-y-4">
       <div>
         <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-neutral-500">
           Work email
@@ -38,9 +64,9 @@ export function SignupForm({ plan }: { plan?: string }) {
         />
         <p className="mt-1 text-xs text-neutral-500">8+ characters.</p>
       </div>
-      {state.error ? (
+      {error ? (
         <p className="text-sm text-red-600" role="alert">
-          {state.error}
+          {error}
         </p>
       ) : null}
       <button

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -16,20 +16,26 @@ interface AdminUserRow {
 }
 
 async function loadUsers(): Promise<AdminUserRow[]> {
-  const supabase = createAdminClient();
+  const [users, memberships, platformAdmins, toursByTeam] = await Promise.all([
+    prisma.users.findMany({
+      select: { id: true, email: true, created_at: true, last_sign_in_at: true },
+      orderBy: { created_at: "desc" },
+      take: 200,
+    }),
+    prisma.team_members.findMany({
+      select: {
+        user_id: true,
+        role: true,
+        teams: { select: { id: true, name: true, plan: true } },
+      },
+    }),
+    prisma.platform_admins.findMany({ select: { user_id: true } }),
+    prisma.tours.findMany({ select: { team_id: true } }),
+  ]);
 
-  const [{ data: usersResp }, { data: memberships }, { data: platformAdmins }, { data: toursByTeam }] =
-    await Promise.all([
-      supabase.auth.admin.listUsers({ page: 1, perPage: 200 }),
-      supabase.from("team_members").select("user_id, role, team:teams(id, name, plan)"),
-      supabase.from("platform_admins").select("user_id"),
-      supabase.from("tours").select("team_id"),
-    ]);
-
-  const users = usersResp?.users ?? [];
-  const adminSet = new Set((platformAdmins ?? []).map((p) => p.user_id));
+  const adminSet = new Set(platformAdmins.map((p) => p.user_id));
   const tourCountByTeam = new Map<string, number>();
-  for (const t of toursByTeam ?? []) {
+  for (const t of toursByTeam) {
     tourCountByTeam.set(t.team_id, (tourCountByTeam.get(t.team_id) ?? 0) + 1);
   }
 
@@ -37,8 +43,8 @@ async function loadUsers(): Promise<AdminUserRow[]> {
     string,
     { role: string; teamId: string; teamName: string; teamPlan: string }
   >();
-  for (const m of memberships ?? []) {
-    const team = Array.isArray(m.team) ? m.team[0] : m.team;
+  for (const m of memberships) {
+    const team = m.teams;
     if (!team) continue;
     membershipByUser.set(m.user_id, {
       role: m.role,
@@ -53,8 +59,8 @@ async function loadUsers(): Promise<AdminUserRow[]> {
     return {
       id: u.id,
       email: u.email ?? "(no email)",
-      createdAt: u.created_at,
-      lastSignInAt: u.last_sign_in_at ?? null,
+      createdAt: u.created_at ? u.created_at.toISOString() : "",
+      lastSignInAt: u.last_sign_in_at ? u.last_sign_in_at.toISOString() : null,
       teamName: m?.teamName ?? null,
       teamPlan: m?.teamPlan ?? null,
       role: m?.role ?? null,

@@ -1,0 +1,388 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  schemas  = ["auth", "public"]
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+/// This model contains an expression index which requires additional setup for migrations. Visit https://pris.ly/d/expression-indexes for more info.
+model users {
+  instance_id                                  String?          @db.Uuid
+  id                                           String           @id @db.Uuid
+  aud                                          String?          @db.VarChar(255)
+  role                                         String?          @db.VarChar(255)
+  email                                        String?          @db.VarChar(255)
+  encrypted_password                           String?          @db.VarChar(255)
+  email_confirmed_at                           DateTime?        @db.Timestamptz(6)
+  invited_at                                   DateTime?        @db.Timestamptz(6)
+  confirmation_token                           String?          @db.VarChar(255)
+  confirmation_sent_at                         DateTime?        @db.Timestamptz(6)
+  recovery_token                               String?          @db.VarChar(255)
+  recovery_sent_at                             DateTime?        @db.Timestamptz(6)
+  email_change_token_new                       String?          @db.VarChar(255)
+  email_change                                 String?          @db.VarChar(255)
+  email_change_sent_at                         DateTime?        @db.Timestamptz(6)
+  last_sign_in_at                              DateTime?        @db.Timestamptz(6)
+  raw_app_meta_data                            Json?
+  raw_user_meta_data                           Json?
+  is_super_admin                               Boolean?
+  created_at                                   DateTime?        @db.Timestamptz(6)
+  updated_at                                   DateTime?        @db.Timestamptz(6)
+  phone                                        String?          @unique
+  phone_confirmed_at                           DateTime?        @db.Timestamptz(6)
+  phone_change                                 String?          @default("")
+  phone_change_token                           String?          @default("") @db.VarChar(255)
+  phone_change_sent_at                         DateTime?        @db.Timestamptz(6)
+  confirmed_at                                 DateTime?        @default(dbgenerated("LEAST(email_confirmed_at, phone_confirmed_at)")) @db.Timestamptz(6)
+  email_change_token_current                   String?          @default("") @db.VarChar(255)
+  email_change_confirm_status                  Int?             @default(0) @db.SmallInt
+  banned_until                                 DateTime?        @db.Timestamptz(6)
+  reauthentication_token                       String?          @default("") @db.VarChar(255)
+  reauthentication_sent_at                     DateTime?        @db.Timestamptz(6)
+  is_sso_user                                  Boolean          @default(false)
+  deleted_at                                   DateTime?        @db.Timestamptz(6)
+  is_anonymous                                 Boolean          @default(false)
+  app_secrets                                  app_secrets[]
+  billing_events                               billing_events[]
+  platform_admins                              platform_admins?
+  team_invites_team_invites_accepted_byTousers team_invites[]   @relation("team_invites_accepted_byTousers")
+  team_invites_team_invites_invited_byTousers  team_invites[]   @relation("team_invites_invited_byTousers")
+  team_members                                 team_members[]
+
+  @@index([created_at(sort: Desc)], map: "idx_users_created_at_desc")
+  @@index([email], map: "idx_users_email")
+  @@index([last_sign_in_at(sort: Desc)], map: "idx_users_last_sign_in_at_desc")
+  @@index([instance_id])
+  @@index([is_anonymous])
+  @@schema("auth")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model app_secrets {
+  key         String   @id
+  value       String
+  description String?
+  updated_at  DateTime @default(now()) @db.Timestamptz(6)
+  updated_by  String?  @db.Uuid
+  users       users?   @relation(fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model billing_events {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  team_id          String   @db.Uuid
+  type             String
+  source           String
+  actor_user_id    String?  @db.Uuid
+  from_plan        plan?
+  to_plan          plan?
+  amount_cents     Int?
+  currency         String?  @default("usd")
+  stripe_event_id  String?  @unique
+  stripe_object_id String?
+  metadata         Json?
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  users            users?   @relation(fields: [actor_user_id], references: [id], onUpdate: NoAction)
+  teams            teams    @relation(fields: [team_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([team_id, created_at(sort: Desc)])
+  @@index([type])
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model hotspots {
+  id           String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  scene_id     String       @db.Uuid
+  type         hotspot_type
+  yaw          Float
+  pitch        Float
+  label        String       @default("")
+  payload      Json         @default("{}")
+  created_at   DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at   DateTime     @default(now()) @db.Timestamptz(6)
+  ai_generated Boolean      @default(false)
+  scenes       scenes       @relation(fields: [scene_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([scene_id], map: "hotspots_scene_idx")
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model leads {
+  id                String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tour_id           String      @db.Uuid
+  email             String
+  name              String?
+  phone             String?
+  message           String?
+  preferred_time    DateTime?   @db.Timestamptz(6)
+  source            lead_source @default(gate)
+  scenes_viewed     Int         @default(0)
+  duration_ms       Int         @default(0)
+  captured_at       DateTime    @default(now()) @db.Timestamptz(6)
+  agent_notified_at DateTime?   @db.Timestamptz(6)
+  ai_score          Int?
+  ai_reason         String?
+  ai_scored_at      DateTime?   @db.Timestamptz(6)
+  tours             tours       @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tour_id, captured_at(sort: Desc)], map: "leads_tour_idx")
+  @@schema("public")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model platform_admins {
+  user_id    String   @id @db.Uuid
+  created_at DateTime @default(now()) @db.Timestamptz(6)
+  users      users    @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@schema("public")
+}
+
+/// This table contains check constraints and requires additional setup for migrations. Visit https://pris.ly/d/check-constraints for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model pricing_tiers {
+  plan              plan     @id
+  display_name      String
+  price_cents       Int
+  currency          String   @default("usd")
+  blurb             String   @default("")
+  features          Json     @default("[]")
+  cta_label         String   @default("Start free trial")
+  highlight         Boolean  @default(false)
+  active            Boolean  @default(true)
+  sort_order        Int      @default(0)
+  stripe_product_id String?
+  stripe_price_id   String?
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  updated_at        DateTime @default(now()) @db.Timestamptz(6)
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model scenes {
+  id                                 String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tour_id                            String                  @db.Uuid
+  name                               String
+  source_image_url                   String
+  tiles_base_url                     String?
+  initial_yaw                        Float                   @default(0)
+  initial_pitch                      Float                   @default(0)
+  initial_fov                        Float                   @default(1.745)
+  initial_roll                       Float                   @default(0)
+  floor                              String?
+  floor_plan_position                Json?
+  order_index                        Int                     @default(0)
+  processing_status                  scene_processing_status @default(ready)
+  created_at                         DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                         DateTime                @default(now()) @db.Timestamptz(6)
+  hotspots                           hotspots[]
+  tours_scenes_tour_idTotours        tours                   @relation("scenes_tour_idTotours", fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  tour_views                         tour_views[]
+  tours_tours_cover_scene_idToscenes tours[]                 @relation("tours_cover_scene_idToscenes")
+
+  @@index([tour_id, order_index], map: "scenes_tour_idx")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model team_invites {
+  id                                    String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  team_id                               String    @db.Uuid
+  email                                 String
+  role                                  team_role @default(agent)
+  token                                 String    @unique
+  invited_by                            String?   @db.Uuid
+  created_at                            DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at                            DateTime  @default(dbgenerated("(now() + '14 days'::interval)")) @db.Timestamptz(6)
+  accepted_at                           DateTime? @db.Timestamptz(6)
+  accepted_by                           String?   @db.Uuid
+  users_team_invites_accepted_byTousers users?    @relation("team_invites_accepted_byTousers", fields: [accepted_by], references: [id], onUpdate: NoAction)
+  users_team_invites_invited_byTousers  users?    @relation("team_invites_invited_byTousers", fields: [invited_by], references: [id], onUpdate: NoAction)
+  teams                                 teams     @relation(fields: [team_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([team_id, created_at(sort: Desc)], map: "team_invites_team_idx")
+  @@index([token])
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model team_members {
+  team_id    String    @db.Uuid
+  user_id    String    @db.Uuid
+  role       team_role @default(agent)
+  created_at DateTime  @default(now()) @db.Timestamptz(6)
+  teams      teams     @relation(fields: [team_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users      users     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([team_id, user_id])
+  @@index([user_id], map: "team_members_user_idx")
+  @@schema("public")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model teams {
+  id                     String           @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                   String
+  slug                   String           @unique
+  plan                   plan             @default(trial)
+  stripe_customer_id     String?
+  stripe_subscription_id String?
+  branding_config        Json?
+  created_at             DateTime         @default(now()) @db.Timestamptz(6)
+  updated_at             DateTime         @default(now()) @db.Timestamptz(6)
+  stripe_status          String?
+  current_period_end     DateTime?        @db.Timestamptz(6)
+  cancel_at_period_end   Boolean          @default(false)
+  trial_ends_at          DateTime?        @db.Timestamptz(6)
+  billing_events         billing_events[]
+  team_invites           team_invites[]
+  team_members           team_members[]
+  tours                  tours[]
+
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model tour_chats {
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tour_id       String   @db.Uuid
+  session_id    String
+  email         String?
+  name          String?
+  messages      Json     @default("[]")
+  message_count Int      @default(0)
+  user_agent    String?
+  referrer      String?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  updated_at    DateTime @default(now()) @db.Timestamptz(6)
+  tours         tours    @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([tour_id, session_id])
+  @@index([tour_id, updated_at(sort: Desc)], map: "tour_chats_tour_idx")
+  @@schema("public")
+}
+
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model tour_views {
+  id                String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  tour_id           String   @db.Uuid
+  scene_id          String?  @db.Uuid
+  viewer_session_id String
+  duration_ms       Int      @default(0)
+  referrer          String?
+  country           String?
+  device            String?
+  created_at        DateTime @default(now()) @db.Timestamptz(6)
+  scenes            scenes?  @relation(fields: [scene_id], references: [id], onUpdate: NoAction)
+  tours             tours    @relation(fields: [tour_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([tour_id, created_at(sort: Desc)], map: "tour_views_tour_idx")
+  @@schema("public")
+}
+
+/// This model or at least one of its fields has comments in the database, and requires an additional setup for migrations: Read more: https://pris.ly/d/database-comments
+/// This model has constraints using non-default deferring rules and requires additional setup for migrations. Visit https://pris.ly/d/constraint-deferring for more info.
+/// This model contains row level security and requires additional setup for migrations. Visit https://pris.ly/d/row-level-security for more info.
+model tours {
+  id                                  String       @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  team_id                             String       @db.Uuid
+  slug                                String       @unique
+  title                               String
+  property_address                    String?
+  status                              tour_status  @default(draft)
+  cover_scene_id                      String?      @db.Uuid
+  view_count                          Int          @default(0)
+  branding                            Json?
+  lead_gate                           Json?
+  floor_plan                          Json?
+  highlights                          String[]
+  details                             Json?
+  expires_at                          DateTime?    @db.Timestamptz(6)
+  webhook_url                         String?
+  created_at                          DateTime     @default(now()) @db.Timestamptz(6)
+  updated_at                          DateTime     @default(now()) @db.Timestamptz(6)
+  ai_description                      String?
+  ai_description_generated_at         DateTime?    @db.Timestamptz(6)
+  mls_description                     String?
+  q_and_a                             Json         @default("[]")
+  external_sources                    Json         @default("[]")
+  leads                               leads[]
+  scenes_scenes_tour_idTotours        scenes[]     @relation("scenes_tour_idTotours")
+  tour_chats                          tour_chats[]
+  tour_views                          tour_views[]
+  scenes_tours_cover_scene_idToscenes scenes?      @relation("tours_cover_scene_idToscenes", fields: [cover_scene_id], references: [id], onUpdate: NoAction, map: "tours_cover_scene_fk")
+  teams                               teams        @relation(fields: [team_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@index([status])
+  @@index([team_id], map: "tours_team_idx")
+  @@schema("public")
+}
+
+enum hotspot_type {
+  scene_link
+  info
+  url
+  image
+  video
+  contact
+
+  @@schema("public")
+}
+
+enum lead_source {
+  gate
+  contact_button
+  in_scene_contact
+  schedule
+
+  @@schema("public")
+}
+
+enum plan {
+  trial
+  solo
+  team
+  brokerage
+
+  @@schema("public")
+}
+
+enum scene_processing_status {
+  pending
+  processing
+  ready
+  failed
+
+  @@schema("public")
+}
+
+enum team_role {
+  owner
+  admin
+  agent
+
+  @@schema("public")
+}
+
+enum tour_status {
+  draft
+  published
+
+  @@schema("public")
+}

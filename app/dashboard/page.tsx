@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requireActiveTeam, isPlatformAdmin } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { CreateTourButton } from "./create-tour-button";
 import { TourCardActions } from "./tour-card-actions";
@@ -18,18 +18,25 @@ interface PageProps {
 
 export default async function DashboardPage({ searchParams }: PageProps) {
   const { team } = await requireActiveTeam();
-  const supabase = await createClient();
   const sp = await searchParams;
   // Platform admins bypass tour quotas server-side. Mirror that in the UI so
   // the dashboard doesn't lie about being "at the limit."
   const admin = await isPlatformAdmin();
 
-  // RLS enforces team_id; we still pass the filter to keep the index hot.
-  const { data: tours } = await supabase
-    .from("tours")
-    .select("id, slug, title, property_address, status, view_count, updated_at")
-    .eq("team_id", team.id)
-    .order("updated_at", { ascending: false });
+  // Explicit team scope — no RLS anymore.
+  const tours = await prisma.tours.findMany({
+    where: { team_id: team.id },
+    select: {
+      id: true,
+      slug: true,
+      title: true,
+      property_address: true,
+      status: true,
+      view_count: true,
+      updated_at: true,
+    },
+    orderBy: { updated_at: "desc" },
+  });
 
   const list = tours ?? [];
   const limit = PLAN_LIMITS[team.plan].tours;

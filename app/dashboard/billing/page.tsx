@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { requireActiveTeam } from "@/lib/auth";
 import { getStripe } from "@/lib/stripe/client";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { getPricingTiers, getPricingTierByPlan } from "@/lib/pricing";
 import { BillingPlanGrid } from "./plan-grid";
 import { AutoCheckout } from "./auto-checkout";
@@ -18,14 +18,21 @@ export default async function DashboardBilling({
   const stripe = await getStripe();
   const stripeConfigured = stripe !== null;
 
-  // Recent billing events (just for this team — RLS allows it).
-  const supabase = createAdminClient();
-  const { data: events } = await supabase
-    .from("billing_events")
-    .select("type, source, from_plan, to_plan, amount_cents, currency, created_at")
-    .eq("team_id", team.id)
-    .order("created_at", { ascending: false })
-    .limit(10);
+  // Recent billing events — explicitly scoped to this team.
+  const events = await prisma.billing_events.findMany({
+    where: { team_id: team.id },
+    select: {
+      type: true,
+      source: true,
+      from_plan: true,
+      to_plan: true,
+      amount_cents: true,
+      currency: true,
+      created_at: true,
+    },
+    orderBy: { created_at: "desc" },
+    take: 10,
+  });
 
   const tiers = await getPricingTiers();
   const currentTier = await getPricingTierByPlan(team.plan);

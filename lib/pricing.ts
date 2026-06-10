@@ -3,7 +3,7 @@
 
 import "server-only";
 import { cache } from "react";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 export interface PricingFeature {
   label: string;
@@ -26,31 +26,30 @@ export interface PricingTier {
 }
 
 export const getPricingTiers = cache(async (): Promise<PricingTier[]> => {
-  const supabase = createAdminClient();
-  const { data, error } = await supabase
-    .from("pricing_tiers")
-    .select("*")
-    .eq("active", true)
-    .order("sort_order");
-  if (error || !data) {
-    console.error("[pricing] getPricingTiers failed:", error?.message);
+  try {
+    const data = await prisma.pricing_tiers.findMany({
+      where: { active: true },
+      orderBy: { sort_order: "asc" },
+    });
+    return data
+      .filter((row) => row.plan !== "trial")
+      .map((r) => rowToTier(r as unknown as DbRow));
+  } catch (err) {
+    console.error(
+      "[pricing] getPricingTiers failed:",
+      err instanceof Error ? err.message : err,
+    );
     return [];
   }
-  return data
-    .filter((row) => row.plan !== "trial")
-    .map(rowToTier);
 });
 
 export const getPricingTierByPlan = cache(
   async (plan: string): Promise<PricingTier | null> => {
     if (!isPlan(plan)) return null;
-    const supabase = createAdminClient();
-    const { data } = await supabase
-      .from("pricing_tiers")
-      .select("*")
-      .eq("plan", plan)
-      .maybeSingle();
-    return data ? rowToTier(data) : null;
+    const data = await prisma.pricing_tiers.findUnique({
+      where: { plan },
+    });
+    return data ? rowToTier(data as unknown as DbRow) : null;
   },
 );
 
@@ -62,16 +61,6 @@ export async function getPriceCentsForPlan(plan: string): Promise<number> {
   const tier = await getPricingTierByPlan(plan);
   return tier?.priceCents ?? 0;
 }
-
-type Row = NonNullable<
-  Awaited<
-    ReturnType<
-      ReturnType<typeof createAdminClient>["from"]
-    >["select"] extends never
-      ? never
-      : never
-  >
->;
 
 interface DbRow {
   plan: string;

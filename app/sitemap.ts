@@ -1,6 +1,6 @@
 import type { MetadataRoute } from "next";
 import { ARTICLES_META } from "@/app/(marketing)/guide/_content/meta";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 const BASE_URL =
   process.env.NEXT_PUBLIC_APP_URL ?? "https://virtualtour.cgmimm.com";
@@ -26,19 +26,18 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
   // Public tour pages — pull every published tour from the DB.
   let tourPages: MetadataRoute.Sitemap = [];
   try {
-    const supabase = createAdminClient();
-    const { data: tours } = await supabase
-      .from("tours")
-      .select("slug, updated_at")
-      .eq("status", "published");
-    tourPages = (tours ?? []).map((t) => ({
+    const tours = await prisma.tours.findMany({
+      where: { status: "published" },
+      select: { slug: true, updated_at: true },
+    });
+    tourPages = tours.map((t) => ({
       url: `${BASE_URL}/t/${t.slug}`,
       lastModified: t.updated_at ? new Date(t.updated_at) : now,
       changeFrequency: "weekly" as const,
       priority: 0.85,
     }));
   } catch {
-    // If Supabase isn't reachable at build time, fall back to the demo only.
+    // If the DB isn't reachable at build time, fall back to the demo only.
     tourPages = [
       {
         url: `${BASE_URL}/t/kremmen-place`,

@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { requireActiveTeam } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import { checkTourQuota } from "@/lib/plan-limits";
 
 function slugify(input: string): string {
@@ -16,16 +16,14 @@ function slugify(input: string): string {
 }
 
 async function uniqueSlug(base: string): Promise<string> {
-  const supabase = await createClient();
   let candidate = base || "tour";
   // Tours.slug is globally unique. Try a few suffixes before falling back to
-  // a timestamp tail — RLS lets us see only our own tours, so this peek is
-  // intentionally done with the admin client would be more accurate. For now
-  // the unique constraint at insert is the real guard; this just reduces
-  // collisions in the common case.
+  // a timestamp tail. The unique constraint at insert is the real guard; this
+  // peek (across all tours, not team-scoped on purpose — slug is global) just
+  // reduces collisions in the common case.
   for (let i = 0; i < 5; i++) {
     const trial = i === 0 ? candidate : `${candidate}-${i + 1}`;
-    const { data } = await supabase.from("tours").select("id").eq("slug", trial).maybeSingle();
+    const data = await prisma.tours.findUnique({ where: { slug: trial }, select: { id: true } });
     if (!data) return trial;
     candidate = base;
   }
@@ -46,21 +44,19 @@ export async function createTourAction(formData: FormData): Promise<void> {
 
   const slug = await uniqueSlug(slugify(title));
 
-  const supabase = await createClient();
-  const { data, error } = await supabase
-    .from("tours")
-    .insert({
+  const data = await prisma.tours.create({
+    data: {
       team_id: team.id,
       slug,
       title,
       property_address: address,
       status: "draft",
-    })
-    .select("id")
-    .single();
+    },
+    select: { id: true },
+  });
 
-  if (error || !data) {
-    throw new Error(error?.message ?? "Failed to create tour");
+  if (!data) {
+    throw new Error("Failed to create tour");
   }
 
   revalidatePath("/dashboard");

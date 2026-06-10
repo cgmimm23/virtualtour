@@ -1,7 +1,6 @@
 import Link from "next/link";
 import { requireActiveTeam } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { PLAN_LIMITS } from "@/lib/plan-limits";
 import { InviteForm, InviteList, MemberList } from "./controls";
 
@@ -24,41 +23,46 @@ interface InviteRow {
 
 export default async function TeamPage() {
   const { team, role: callerRole } = await requireActiveTeam("/dashboard/team");
-  const supabase = await createClient();
-  const admin = createAdminClient();
   const canManage = callerRole === "owner" || callerRole === "admin";
 
-  const [{ data: members }, { data: invites }] = await Promise.all([
-    supabase
-      .from("team_members")
-      .select("user_id, role, created_at")
-      .eq("team_id", team.id)
-      .order("created_at", { ascending: true }),
-    supabase
-      .from("team_invites")
-      .select("id, email, role, created_at, expires_at, accepted_at")
-      .eq("team_id", team.id)
-      .is("accepted_at", null)
-      .order("created_at", { ascending: false }),
+  const [members, invites] = await Promise.all([
+    prisma.team_members.findMany({
+      where: { team_id: team.id },
+      select: {
+        user_id: true,
+        role: true,
+        created_at: true,
+        // auth.users join — resolves member emails (no admin API anymore).
+        users: { select: { email: true } },
+      },
+      orderBy: { created_at: "asc" },
+    }),
+    prisma.team_invites.findMany({
+      where: { team_id: team.id, accepted_at: null },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        created_at: true,
+        expires_at: true,
+        accepted_at: true,
+      },
+      orderBy: { created_at: "desc" },
+    }),
   ]);
 
-  // auth.users isn't on PostgREST — fetch emails via the admin API.
-  const memberRows: MemberRow[] = [];
-  for (const m of members ?? []) {
-    const { data, error } = await admin.auth.admin.getUserById(m.user_id);
-    memberRows.push({
-      userId: m.user_id,
-      email: error || !data?.user?.email ? "(unknown)" : data.user.email,
-      role: m.role,
-      joinedAt: m.created_at,
-    });
-  }
+  const memberRows: MemberRow[] = (members ?? []).map((m) => ({
+    userId: m.user_id,
+    email: m.users?.email ?? "(unknown)",
+    role: m.role,
+    joinedAt: m.created_at.toISOString(),
+  }));
   const inviteRows: InviteRow[] = (invites ?? []).map((i) => ({
     id: i.id,
     email: i.email,
     role: i.role,
-    invitedAt: i.created_at,
-    expiresAt: i.expires_at,
+    invitedAt: i.created_at.toISOString(),
+    expiresAt: i.expires_at.toISOString(),
   }));
 
   const memberLimit = PLAN_LIMITS[team.plan].members;

@@ -1,12 +1,12 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { requireActiveTeam } from "@/lib/auth";
+import { authorizeTourAccess } from "./access";
 import { notifyAgentOfLead } from "@/lib/email/lead-captured";
 import type { Lead } from "./types";
-import type { LeadSource, Database } from "@/types/supabase";
+import type { LeadSource } from "@/types/supabase";
 
 // submitPublicLead --------------------------------------------------------
 //
@@ -33,26 +33,35 @@ export async function submitPublicLead(
     return { ok: false, error: "A valid email is required." };
   }
 
-  const supabase = createAdminClient();
-  const { data, error } = await supabase.rpc("submit_public_lead", {
-    p_tour_slug: input.tourSlug,
-    p_email: input.email.trim(),
-    p_name: input.name?.trim() || null,
-    p_phone: input.phone?.trim() || null,
-    p_preferred_time: input.preferredTime || null,
-    p_source: input.source,
-    p_scenes_viewed: input.scenesViewed,
-    p_duration_ms: input.durationMs,
-  });
-
-  if (error) return { ok: false, error: error.message };
+  // SECURITY DEFINER RPC: validates the slug + status before inserting. We
+  // call it via raw SQL since the Postgres function still exists. Casts mirror
+  // the function's arg types (timestamptz, lead_source enum).
+  let leadId: string;
+  try {
+    const rows = await prisma.$queryRawUnsafe<{ submit_public_lead: string }[]>(
+      `select submit_public_lead($1, $2, $3, $4, $5::timestamptz, $6::lead_source, $7, $8) as submit_public_lead`,
+      input.tourSlug,
+      input.email.trim(),
+      input.name?.trim() || null,
+      input.phone?.trim() || null,
+      input.preferredTime || null,
+      input.source,
+      input.scenesViewed,
+      input.durationMs,
+    );
+    const id = rows[0]?.submit_public_lead;
+    if (!id) return { ok: false, error: "Lead submission failed." };
+    leadId = id;
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Lead submission failed." };
+  }
 
   // Fire the agent notification email out-of-band — we don't want a Resend
   // hiccup to fail the lead submission. notifyAgentOfLead swallows its own
   // errors but we still try/catch for paranoia.
   try {
     await notifyAgentOfLead({
-      leadId: data as unknown as string,
+      leadId,
       tourSlug: input.tourSlug,
       email: input.email.trim(),
       name: input.name?.trim() ?? null,
@@ -66,31 +75,33 @@ export async function submitPublicLead(
     console.error("[submitPublicLead] notify failed:", err);
   }
 
-  return { ok: true, id: data as unknown as string };
+  return { ok: true, id: leadId };
 }
 
 // listLeadsForTour --------------------------------------------------------
 //
-// Authed. RLS scopes leads to the caller's team via the tour relation.
+// Authed. No RLS anymore — authorizeTourAccess explicitly confirms the caller
+// is a platform admin or a member of the tour's own team before we read leads.
 
 export async function listLeadsForTour(tourId: string): Promise<Lead[]> {
-  await requireActiveTeam();
-  const supabase = await createClient();
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("id, slug")
-    .eq("id", tourId)
-    .maybeSingle();
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) {
+    if (access.status === 404) return [];
+    throw new Error(access.error);
+  }
+
+  const tour = await prisma.tours.findUnique({
+    where: { id: tourId },
+    select: { id: true, slug: true },
+  });
   if (!tour) return [];
 
-  const { data, error } = await supabase
-    .from("leads")
-    .select("*")
-    .eq("tour_id", tourId)
-    .order("captured_at", { ascending: false });
+  const data = await prisma.leads.findMany({
+    where: { tour_id: tourId },
+    orderBy: { captured_at: "desc" },
+  });
 
-  if (error) throw new Error(error.message);
-  return (data ?? []).map((row) => rowToLead(row, tour.slug));
+  return data.map((row) => rowToLead(row as unknown as LeadRow, tour.slug));
 }
 
 // listLeadsForTeam --------------------------------------------------------
@@ -105,28 +116,24 @@ export interface LeadWithTour extends Lead {
 
 export async function listLeadsForTeam(): Promise<LeadWithTour[]> {
   const { team } = await requireActiveTeam();
-  const supabase = await createClient();
 
-  // Two queries because PostgREST nested selects don't compose cleanly with
-  // ordering across the join in our shape.
-  const { data: tours } = await supabase
-    .from("tours")
-    .select("id, slug, title")
-    .eq("team_id", team.id);
-  const tourMap = new Map((tours ?? []).map((t) => [t.id, t]));
+  // Scope tours to the caller's team, then pull leads only for those tours.
+  const tours = await prisma.tours.findMany({
+    where: { team_id: team.id },
+    select: { id: true, slug: true, title: true },
+  });
+  const tourMap = new Map(tours.map((t) => [t.id, t]));
   const tourIds = Array.from(tourMap.keys());
   if (tourIds.length === 0) return [];
 
-  const { data: leads, error } = await supabase
-    .from("leads")
-    .select("*")
-    .in("tour_id", tourIds)
-    .order("captured_at", { ascending: false });
-  if (error) throw new Error(error.message);
+  const leads = await prisma.leads.findMany({
+    where: { tour_id: { in: tourIds } },
+    orderBy: { captured_at: "desc" },
+  });
 
-  return (leads ?? []).map((row) => {
+  return leads.map((row) => {
     const tour = tourMap.get(row.tour_id);
-    const lead = rowToLead(row, tour?.slug ?? "");
+    const lead = rowToLead(row as unknown as LeadRow, tour?.slug ?? "");
     return { ...lead, tourTitle: tour?.title ?? "(unknown)", tourId: row.tour_id };
   });
 }
@@ -134,23 +141,43 @@ export async function listLeadsForTeam(): Promise<LeadWithTour[]> {
 // deleteAllLeadsForTour --------------------------------------------------
 
 export async function deleteAllLeadsForTour(tourId: string): Promise<void> {
-  await requireActiveTeam();
-  const supabase = await createClient();
-  const { error } = await supabase.from("leads").delete().eq("tour_id", tourId);
-  if (error) throw new Error(error.message);
+  // No RLS — must confirm the caller owns this tour before bulk-deleting its
+  // leads. authorizeTourAccess passes platform admins and same-team members.
+  const access = await authorizeTourAccess(tourId);
+  if (!access.ok) throw new Error(access.error);
+  await prisma.leads.deleteMany({ where: { tour_id: tourId } });
   revalidatePath("/dashboard/leads");
 }
 
-function rowToLead(row: Database["public"]["Tables"]["leads"]["Row"], tourSlug: string): Lead {
+// Prisma returns Date objects for timestamptz columns; the Lead type uses ISO
+// strings, so we normalize at the boundary.
+interface LeadRow {
+  id: string;
+  email: string;
+  name: string | null;
+  phone: string | null;
+  preferred_time: Date | string | null;
+  source: string;
+  captured_at: Date | string;
+  scenes_viewed: number;
+  duration_ms: number;
+}
+
+function toIso(v: Date | string | null | undefined): string | undefined {
+  if (v == null) return undefined;
+  return v instanceof Date ? v.toISOString() : v;
+}
+
+function rowToLead(row: LeadRow, tourSlug: string): Lead {
   return {
     id: row.id,
     tourSlug,
     email: row.email,
     name: row.name ?? undefined,
     phone: row.phone ?? undefined,
-    preferredTime: row.preferred_time ?? undefined,
+    preferredTime: toIso(row.preferred_time),
     source: row.source as Lead["source"],
-    capturedAt: row.captured_at,
+    capturedAt: toIso(row.captured_at) ?? "",
     scenesViewed: row.scenes_viewed,
     durationMs: row.duration_ms,
   };

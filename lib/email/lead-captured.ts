@@ -1,9 +1,10 @@
 // "You got a lead" email to the agent. Fired from submitPublicLead after the
-// RPC insert succeeds. We look up the tour → team → owners via the admin
-// client (RLS would block this since the caller is anonymous).
+// insert succeeds. We look up the tour → team → owners directly via Prisma
+// (the caller is anonymous; this lookup is intentionally cross-tenant since we
+// resolve the tour's owning team from the public tour slug).
 
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { sendEmail, esc } from "./client";
 
 interface NotifyParams {
@@ -19,30 +20,23 @@ interface NotifyParams {
 }
 
 export async function notifyAgentOfLead(params: NotifyParams): Promise<void> {
-  const supabase = createAdminClient();
-
-  // Resolve tour → team → owner emails.
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("id, title, slug, property_address, team_id")
-    .eq("slug", params.tourSlug)
-    .maybeSingle();
+  // Resolve tour → team → owner emails. Cross-tenant by design: the public
+  // tour slug determines which team owns the lead.
+  const tour = await prisma.tours.findUnique({
+    where: { slug: params.tourSlug },
+    select: { id: true, title: true, slug: true, property_address: true, team_id: true },
+  });
   if (!tour) return;
 
-  const { data: members } = await supabase
-    .from("team_members")
-    .select("user_id, role")
-    .eq("team_id", tour.team_id)
-    .in("role", ["owner", "admin"]);
-  if (!members || members.length === 0) return;
+  const members = await prisma.team_members.findMany({
+    where: { team_id: tour.team_id, role: { in: ["owner", "admin"] } },
+    select: { users: { select: { email: true } } },
+  });
+  if (members.length === 0) return;
 
-  // auth.users isn't in PostgREST schemas; use a join via Supabase admin
-  // GoTrue API. Cheaper here to map via direct SQL.
-  const userIds = members.map((m) => m.user_id);
   const recipients: string[] = [];
-  for (const id of userIds) {
-    const { data, error } = await supabase.auth.admin.getUserById(id);
-    if (!error && data?.user?.email) recipients.push(data.user.email);
+  for (const m of members) {
+    if (m.users?.email) recipients.push(m.users.email);
   }
   if (recipients.length === 0) return;
 

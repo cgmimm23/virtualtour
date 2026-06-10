@@ -5,7 +5,7 @@
 // and the marketing page. If you change one, change all three.
 
 import "server-only";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import { isPlatformAdmin } from "@/lib/auth";
 import type { Plan } from "@/types/supabase";
 
@@ -40,17 +40,12 @@ export interface QuotaResult {
 }
 
 export async function getTeamUsage(teamId: string): Promise<TeamUsage> {
-  const supabase = await createClient();
-  // Service-role would let us count past RLS, but the caller is always a
-  // member of the team — RLS lets them count too.
+  // Explicitly scoped to the passed teamId (RLS no longer exists).
   const [tours, members] = await Promise.all([
-    supabase.from("tours").select("id", { count: "exact", head: true }).eq("team_id", teamId),
-    supabase.from("team_members").select("user_id", { count: "exact", head: true }).eq("team_id", teamId),
+    prisma.tours.count({ where: { team_id: teamId } }),
+    prisma.team_members.count({ where: { team_id: teamId } }),
   ]);
-  return {
-    tours: tours.count ?? 0,
-    members: members.count ?? 0,
-  };
+  return { tours, members };
 }
 
 /**
@@ -62,12 +57,8 @@ export async function checkTourQuota(teamId: string, plan: Plan): Promise<QuotaR
   const limits = PLAN_LIMITS[plan];
   const isAdmin = await isPlatformAdmin();
 
-  const supabase = await createClient();
-  const { count } = await supabase
-    .from("tours")
-    .select("id", { count: "exact", head: true })
-    .eq("team_id", teamId);
-  const current = count ?? 0;
+  // Explicitly scoped to the passed teamId (RLS no longer exists).
+  const current = await prisma.tours.count({ where: { team_id: teamId } });
   const limit = limits.tours;
 
   if (isAdmin) {

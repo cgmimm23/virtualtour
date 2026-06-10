@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { requirePlatformAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { getPricingTiers } from "@/lib/pricing";
 
 export const dynamic = "force-dynamic";
@@ -54,16 +54,24 @@ function statusBadge(s: string | null) {
 }
 
 async function loadRows(): Promise<{ rows: BillingRow[]; mrrCents: number }> {
-  const supabase = createAdminClient();
   const PLAN_MRR = await loadPlanMrr();
-  const { data: teams } = await supabase
-    .from("teams")
-    .select(
-      "id, name, slug, plan, stripe_customer_id, stripe_subscription_id, stripe_status, current_period_end, cancel_at_period_end, created_at",
-    )
-    .order("created_at", { ascending: false });
+  const teams = await prisma.teams.findMany({
+    select: {
+      id: true,
+      name: true,
+      slug: true,
+      plan: true,
+      stripe_customer_id: true,
+      stripe_subscription_id: true,
+      stripe_status: true,
+      current_period_end: true,
+      cancel_at_period_end: true,
+      created_at: true,
+    },
+    orderBy: { created_at: "desc" },
+  });
 
-  const rows = (teams ?? []).map((t) => ({
+  const rows = teams.map((t) => ({
     teamId: t.id,
     name: t.name,
     slug: t.slug,
@@ -71,9 +79,9 @@ async function loadRows(): Promise<{ rows: BillingRow[]; mrrCents: number }> {
     stripeCustomerId: t.stripe_customer_id ?? null,
     stripeSubscriptionId: t.stripe_subscription_id ?? null,
     stripeStatus: t.stripe_status ?? null,
-    currentPeriodEnd: t.current_period_end ?? null,
+    currentPeriodEnd: t.current_period_end ? t.current_period_end.toISOString() : null,
     cancelAtPeriodEnd: t.cancel_at_period_end ?? false,
-    createdAt: t.created_at,
+    createdAt: t.created_at.toISOString(),
     mrrCents: t.stripe_status === "active" ? (PLAN_MRR[t.plan] ?? 0) : 0,
   }));
 

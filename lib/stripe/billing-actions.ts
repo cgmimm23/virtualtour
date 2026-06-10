@@ -4,8 +4,8 @@ import "server-only";
 import type Stripe from "stripe";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requirePlatformAdmin, getUser } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { requirePlatformAdmin, getUser, getActiveTeam } from "@/lib/auth";
+import { prisma } from "@/lib/db";
 import { getStripe } from "./client";
 import { bootstrapStripeProducts, bootstrapStripeWebhook } from "./products";
 import { invalidateSecret } from "@/lib/secrets";
@@ -37,16 +37,19 @@ export async function saveSecret(input: { key: string; value: string }) {
     return { ok: false as const, error: parsed.error.issues[0]?.message ?? "invalid input" };
   }
 
-  const supabase = createAdminClient();
-  const { error } = await supabase.from("app_secrets").upsert(
-    {
-      key: parsed.data.key,
-      value: parsed.data.value.trim(),
-      updated_by: admin.id,
-    },
-    { onConflict: "key" },
-  );
-  if (error) return { ok: false as const, error: error.message };
+  try {
+    await prisma.app_secrets.upsert({
+      where: { key: parsed.data.key },
+      update: { value: parsed.data.value.trim(), updated_by: admin.id },
+      create: {
+        key: parsed.data.key,
+        value: parsed.data.value.trim(),
+        updated_by: admin.id,
+      },
+    });
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "save failed" };
+  }
 
   invalidateSecret(parsed.data.key as SecretKey);
   revalidatePath("/admin/settings");
@@ -58,9 +61,11 @@ export async function deleteSecret(key: string) {
   const parsed = SaveSecretSchema.shape.key.safeParse(key);
   if (!parsed.success) return { ok: false as const, error: "invalid key" };
 
-  const supabase = createAdminClient();
-  const { error } = await supabase.from("app_secrets").delete().eq("key", parsed.data);
-  if (error) return { ok: false as const, error: error.message };
+  try {
+    await prisma.app_secrets.deleteMany({ where: { key: parsed.data } });
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "delete failed" };
+  }
 
   invalidateSecret(parsed.data);
   revalidatePath("/admin/settings");
@@ -123,20 +128,22 @@ export async function savePricingTier(input: {
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0]?.message ?? "invalid input" };
   }
-  const supabase = createAdminClient();
-  const { error } = await supabase
-    .from("pricing_tiers")
-    .update({
-      display_name: parsed.data.displayName,
-      price_cents: parsed.data.priceCents,
-      blurb: parsed.data.blurb,
-      cta_label: parsed.data.ctaLabel,
-      highlight: parsed.data.highlight,
-      active: parsed.data.active,
-      features: parsed.data.features,
-    })
-    .eq("plan", parsed.data.plan);
-  if (error) return { ok: false as const, error: error.message };
+  try {
+    await prisma.pricing_tiers.update({
+      where: { plan: parsed.data.plan },
+      data: {
+        display_name: parsed.data.displayName,
+        price_cents: parsed.data.priceCents,
+        blurb: parsed.data.blurb,
+        cta_label: parsed.data.ctaLabel,
+        highlight: parsed.data.highlight,
+        active: parsed.data.active,
+        features: parsed.data.features,
+      },
+    });
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "update failed" };
+  }
   revalidatePath("/admin/pricing");
   revalidatePath("/pricing");
   revalidatePath("/dashboard/billing");
@@ -153,13 +160,8 @@ export async function syncTierToStripe(input: { plan: string }) {
   if (!stripe) {
     return { ok: false as const, error: "Stripe not configured" };
   }
-  const supabase = createAdminClient();
   const planValue = input.plan as "solo" | "team" | "brokerage";
-  const { data: tier } = await supabase
-    .from("pricing_tiers")
-    .select("*")
-    .eq("plan", planValue)
-    .maybeSingle();
+  const tier = await prisma.pricing_tiers.findUnique({ where: { plan: planValue } });
   if (!tier) return { ok: false as const, error: "tier not found" };
 
   // Locate or create the product (one product per plan, matched by metadata).
@@ -224,10 +226,10 @@ export async function syncTierToStripe(input: { plan: string }) {
   }
 
   // Persist the linkage.
-  await supabase
-    .from("pricing_tiers")
-    .update({ stripe_product_id: product.id, stripe_price_id: priceId })
-    .eq("plan", tier.plan);
+  await prisma.pricing_tiers.update({
+    where: { plan: tier.plan },
+    data: { stripe_product_id: product.id, stripe_price_id: priceId },
+  });
 
   // Mirror into app_secrets so checkout's getSecret('STRIPE_PRICE_ID_*') still works.
   const secretKey =
@@ -236,10 +238,11 @@ export async function syncTierToStripe(input: { plan: string }) {
       : tier.plan === "team"
         ? "STRIPE_PRICE_ID_TEAM"
         : "STRIPE_PRICE_ID_BROKERAGE";
-  await supabase.from("app_secrets").upsert(
-    { key: secretKey, value: priceId, description: `${tier.display_name} monthly price ID` },
-    { onConflict: "key" },
-  );
+  await prisma.app_secrets.upsert({
+    where: { key: secretKey },
+    update: { value: priceId, description: `${tier.display_name} monthly price ID` },
+    create: { key: secretKey, value: priceId, description: `${tier.display_name} monthly price ID` },
+  });
   invalidateSecret(secretKey as Parameters<typeof invalidateSecret>[0]);
 
   revalidatePath("/admin/pricing");
@@ -294,32 +297,35 @@ export async function setTeamPlan(input: {
   if (!parsed.success) {
     return { ok: false as const, error: parsed.error.issues[0]?.message ?? "invalid input" };
   }
-  const supabase = createAdminClient();
-
-  const { data: team } = await supabase
-    .from("teams")
-    .select("id, plan")
-    .eq("id", parsed.data.teamId)
-    .maybeSingle();
+  // Admin cross-team operation — intentionally unscoped to a single team.
+  const team = await prisma.teams.findUnique({
+    where: { id: parsed.data.teamId },
+    select: { id: true, plan: true },
+  });
   if (!team) return { ok: false as const, error: "team not found" };
   if (team.plan === parsed.data.toPlan) {
     return { ok: false as const, error: `team is already on plan ${team.plan}` };
   }
 
-  const { error: updateErr } = await supabase
-    .from("teams")
-    .update({ plan: parsed.data.toPlan })
-    .eq("id", parsed.data.teamId);
-  if (updateErr) return { ok: false as const, error: updateErr.message };
+  try {
+    await prisma.teams.update({
+      where: { id: parsed.data.teamId },
+      data: { plan: parsed.data.toPlan },
+    });
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "update failed" };
+  }
 
-  await supabase.from("billing_events").insert({
-    team_id: parsed.data.teamId,
-    type: "plan_changed",
-    source: "admin",
-    actor_user_id: admin.id,
-    from_plan: team.plan,
-    to_plan: parsed.data.toPlan,
-    metadata: parsed.data.reason ? { reason: parsed.data.reason } : null,
+  await prisma.billing_events.create({
+    data: {
+      team_id: parsed.data.teamId,
+      type: "plan_changed",
+      source: "admin",
+      actor_user_id: admin.id,
+      from_plan: team.plan,
+      to_plan: parsed.data.toPlan,
+      metadata: parsed.data.reason ? { reason: parsed.data.reason } : undefined,
+    },
   });
 
   revalidatePath("/admin/billing");
@@ -338,28 +344,31 @@ export async function deleteTeam(input: { teamId: string; confirm: true }) {
   if (!parsed.success) {
     return { ok: false as const, error: "confirmation required" };
   }
-  const supabase = createAdminClient();
-
+  // Admin cross-team operation — intentionally unscoped to a single team.
   // Audit log first (before cascade) — captures the team metadata.
-  const { data: team } = await supabase
-    .from("teams")
-    .select("name, plan")
-    .eq("id", parsed.data.teamId)
-    .maybeSingle();
+  const team = await prisma.teams.findUnique({
+    where: { id: parsed.data.teamId },
+    select: { name: true, plan: true },
+  });
   if (!team) return { ok: false as const, error: "team not found" };
 
-  await supabase.from("billing_events").insert({
-    team_id: parsed.data.teamId,
-    type: "team_deleted",
-    source: "admin",
-    actor_user_id: admin.id,
-    from_plan: team.plan,
-    metadata: { team_name: team.name, deleted_by: admin.email },
+  await prisma.billing_events.create({
+    data: {
+      team_id: parsed.data.teamId,
+      type: "team_deleted",
+      source: "admin",
+      actor_user_id: admin.id,
+      from_plan: team.plan,
+      metadata: { team_name: team.name, deleted_by: admin.email },
+    },
   });
 
-  // Cascade-delete the team. RLS bypassed via service-role.
-  const { error } = await supabase.from("teams").delete().eq("id", parsed.data.teamId);
-  if (error) return { ok: false as const, error: error.message };
+  // Cascade-delete the team.
+  try {
+    await prisma.teams.delete({ where: { id: parsed.data.teamId } });
+  } catch (err) {
+    return { ok: false as const, error: err instanceof Error ? err.message : "delete failed" };
+  }
 
   revalidatePath("/admin/billing");
   revalidatePath("/admin/teams");
@@ -384,17 +393,10 @@ export async function startCheckout(input: { plan: string }) {
   const stripe = await getStripe();
   if (!stripe) return { ok: false as const, error: "Stripe not configured yet" };
 
-  const supabase = createAdminClient();
-  const { data: membership } = await supabase
-    .from("team_members")
-    .select("team_id, team:teams(*)")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!membership || !membership.team) return { ok: false as const, error: "no team" };
-  const team = Array.isArray(membership.team) ? membership.team[0] : membership.team;
-  if (!team) return { ok: false as const, error: "no team" };
+  // Scope to the signed-in user's active team.
+  const active = await getActiveTeam();
+  if (!active) return { ok: false as const, error: "no team" };
+  const team = active.team;
 
   const priceKey: SecretKey =
     parsed.data.plan === "solo"
@@ -420,10 +422,10 @@ export async function startCheckout(input: { plan: string }) {
       metadata: { team_id: team.id },
     });
     customerId = customer.id;
-    await supabase
-      .from("teams")
-      .update({ stripe_customer_id: customerId })
-      .eq("id", team.id);
+    await prisma.teams.update({
+      where: { id: team.id },
+      data: { stripe_customer_id: customerId },
+    });
   }
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://virtualtour.cgmimm.com";
@@ -460,20 +462,13 @@ export async function switchPlan(input: { plan: string }) {
   const stripe = await getStripe();
   if (!stripe) return { ok: false as const, error: "Stripe not configured yet" };
 
-  const supabase = createAdminClient();
-  const { data: membership } = await supabase
-    .from("team_members")
-    .select("team_id, role, team:teams(*)")
-    .eq("user_id", user.id)
-    .order("created_at", { ascending: true })
-    .limit(1)
-    .maybeSingle();
-  if (!membership || !membership.team) return { ok: false as const, error: "no team" };
-  if (membership.role !== "owner" && membership.role !== "admin") {
+  // Scope to the signed-in user's active team.
+  const active = await getActiveTeam();
+  if (!active) return { ok: false as const, error: "no team" };
+  if (active.role !== "owner" && active.role !== "admin") {
     return { ok: false as const, error: "only owners / admins can change the plan" };
   }
-  const team = Array.isArray(membership.team) ? membership.team[0] : membership.team;
-  if (!team) return { ok: false as const, error: "no team" };
+  const team = active.team;
   if (!team.stripe_subscription_id) {
     return {
       ok: false as const,
@@ -535,19 +530,21 @@ export async function switchPlan(input: { plan: string }) {
   // customer.subscription.updated. We optimistically write the plan field
   // too so the UI reflects the change immediately without waiting for the
   // webhook round-trip.
-  await supabase
-    .from("teams")
-    .update({ plan: parsed.data.plan })
-    .eq("id", team.id);
-  await supabase.from("billing_events").insert({
-    team_id: team.id,
-    type: "plan_switched",
-    source: "self_serve",
-    actor_user_id: user.id,
-    from_plan: team.plan,
-    to_plan: parsed.data.plan,
-    stripe_object_id: subscription.id,
-    metadata: { proration: "create_prorations" },
+  await prisma.teams.update({
+    where: { id: team.id },
+    data: { plan: parsed.data.plan },
+  });
+  await prisma.billing_events.create({
+    data: {
+      team_id: team.id,
+      type: "plan_switched",
+      source: "self_serve",
+      actor_user_id: user.id,
+      from_plan: team.plan,
+      to_plan: parsed.data.plan,
+      stripe_object_id: subscription.id,
+      metadata: { proration: "create_prorations" },
+    },
   });
 
   revalidatePath("/dashboard/billing");
@@ -561,18 +558,9 @@ export async function openCustomerPortal() {
   const stripe = await getStripe();
   if (!stripe) return { ok: false as const, error: "Stripe not configured yet" };
 
-  const supabase = createAdminClient();
-  const { data: membership } = await supabase
-    .from("team_members")
-    .select("team:teams(stripe_customer_id)")
-    .eq("user_id", user.id)
-    .limit(1)
-    .maybeSingle();
-  const team = membership?.team
-    ? Array.isArray(membership.team)
-      ? membership.team[0]
-      : membership.team
-    : null;
+  // Scope to the signed-in user's active team.
+  const active = await getActiveTeam();
+  const team = active?.team ?? null;
   if (!team?.stripe_customer_id) {
     return { ok: false as const, error: "no Stripe customer yet — start a subscription first" };
   }

@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { requirePlatformAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { getPricingTiers } from "@/lib/pricing";
 import { TeamPlanControls } from "./controls";
 
@@ -22,34 +22,35 @@ export default async function TeamDetail({ params }: PageProps) {
   await requirePlatformAdmin();
   const { id } = await params;
 
-  const supabase = createAdminClient();
-  const { data: team } = await supabase
-    .from("teams")
-    .select("*")
-    .eq("id", id)
-    .maybeSingle();
+  const team = await prisma.teams.findUnique({ where: { id } });
   if (!team) notFound();
 
-  const [{ data: members }, { data: tours }, { data: events }] = await Promise.all([
-    supabase
-      .from("team_members")
-      .select("user_id, role, created_at")
-      .eq("team_id", id)
-      .order("created_at"),
-    supabase.from("tours").select("id, slug, title, status, created_at").eq("team_id", id),
-    supabase
-      .from("billing_events")
-      .select("*")
-      .eq("team_id", id)
-      .order("created_at", { ascending: false })
-      .limit(50),
+  const [members, tours, events] = await Promise.all([
+    prisma.team_members.findMany({
+      where: { team_id: id },
+      select: {
+        user_id: true,
+        role: true,
+        created_at: true,
+        users: { select: { email: true } },
+      },
+      orderBy: { created_at: "asc" },
+    }),
+    prisma.tours.findMany({
+      where: { team_id: id },
+      select: { id: true, slug: true, title: true, status: true, created_at: true },
+    }),
+    prisma.billing_events.findMany({
+      where: { team_id: id },
+      orderBy: { created_at: "desc" },
+      take: 50,
+    }),
   ]);
 
-  // Hydrate member emails via auth.admin
+  // Member emails come from the joined users relation.
   const memberEmails: Record<string, string> = {};
-  for (const m of members ?? []) {
-    const { data: u } = await supabase.auth.admin.getUserById(m.user_id);
-    if (u?.user?.email) memberEmails[m.user_id] = u.user.email;
+  for (const m of members) {
+    if (m.users?.email) memberEmails[m.user_id] = m.users.email;
   }
 
   const tiers = await getPricingTiers();

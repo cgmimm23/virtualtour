@@ -1,20 +1,19 @@
 import Link from "next/link";
 import { requireActiveTeam } from "@/lib/auth";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Analytics — VITA" };
 
 export default async function AnalyticsPage() {
   const { team } = await requireActiveTeam("/dashboard/analytics");
-  const supabase = await createClient();
 
-  // Tour list scoped to this team. RLS scopes everything else through.
-  const { data: tours } = await supabase
-    .from("tours")
-    .select("id, slug, title, status, view_count")
-    .eq("team_id", team.id)
-    .order("view_count", { ascending: false });
+  // Tour list scoped to this team — explicit, no RLS.
+  const tours = await prisma.tours.findMany({
+    where: { team_id: team.id },
+    select: { id: true, slug: true, title: true, status: true, view_count: true },
+    orderBy: { view_count: "desc" },
+  });
 
   const tourIds = (tours ?? []).map((t) => t.id);
   if (tourIds.length === 0) {
@@ -28,14 +27,24 @@ export default async function AnalyticsPage() {
     );
   }
 
-  // Pull all view rows for the team's tours from the last 30 days. RLS on
-  // tour_views inherits the tour's team policy, so this is team-scoped.
-  const sinceIso = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-  const { data: rows } = await supabase
-    .from("tour_views")
-    .select("tour_id, viewer_session_id, device, country, referrer, created_at")
-    .in("tour_id", tourIds)
-    .gte("created_at", sinceIso);
+  // Pull all view rows for the team's tours from the last 30 days. tourIds is
+  // already team-scoped (derived from the team's tours above), so the
+  // tour_id IN (...) filter is the team scope.
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+  const rows = await prisma.tour_views.findMany({
+    where: {
+      tour_id: { in: tourIds },
+      created_at: { gte: since },
+    },
+    select: {
+      tour_id: true,
+      viewer_session_id: true,
+      device: true,
+      country: true,
+      referrer: true,
+      created_at: true,
+    },
+  });
   const views = rows ?? [];
 
   const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;

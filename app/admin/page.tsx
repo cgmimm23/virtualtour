@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 export const dynamic = "force-dynamic";
 
@@ -10,27 +10,15 @@ interface Stat {
 }
 
 async function loadStats(): Promise<Stat[]> {
-  const supabase = createAdminClient();
-  // count: "exact" + head: true + select shape — these are HEAD requests
-  // that return only a count, no rows. Cheap.
-  const [
-    { count: userCount },
-    { count: teamCount },
-    { count: tourCount },
-    { count: publishedCount },
-    { count: leadCount },
-    { count: viewCount },
-  ] = await Promise.all([
-    supabase.from("team_members").select("user_id", { count: "exact", head: true }),
-    supabase.from("teams").select("id", { count: "exact", head: true }),
-    supabase.from("tours").select("id", { count: "exact", head: true }),
-    supabase
-      .from("tours")
-      .select("id", { count: "exact", head: true })
-      .eq("status", "published"),
-    supabase.from("leads").select("id", { count: "exact", head: true }),
-    supabase.from("tour_views").select("id", { count: "exact", head: true }),
-  ]);
+  const [userCount, teamCount, tourCount, publishedCount, leadCount, viewCount] =
+    await Promise.all([
+      prisma.team_members.count(),
+      prisma.teams.count(),
+      prisma.tours.count(),
+      prisma.tours.count({ where: { status: "published" } }),
+      prisma.leads.count(),
+      prisma.tour_views.count(),
+    ]);
 
   return [
     { label: "Users", value: userCount ?? 0, href: "/admin/users" },
@@ -43,32 +31,36 @@ async function loadStats(): Promise<Stat[]> {
 }
 
 async function loadRecentSignups(): Promise<Array<{ email: string; createdAt: string }>> {
-  const supabase = createAdminClient();
-  // auth.admin.listUsers requires service role — the admin client has it.
-  const { data, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 8 });
-  if (error || !data) return [];
-  return data.users.map((u) => ({
+  const users = await prisma.users.findMany({
+    select: { email: true, created_at: true },
+    orderBy: { created_at: "desc" },
+    take: 8,
+  });
+  return users.map((u) => ({
     email: u.email ?? "(no email)",
-    createdAt: u.created_at,
+    createdAt: u.created_at ? u.created_at.toISOString() : "",
   }));
 }
 
 async function loadRecentLeads(): Promise<
   Array<{ email: string; tourSlug: string; capturedAt: string; source: string }>
 > {
-  const supabase = createAdminClient();
-  const { data } = await supabase
-    .from("leads")
-    .select("email, source, captured_at, tour:tours(slug)")
-    .order("captured_at", { ascending: false })
-    .limit(8);
-  if (!data) return [];
+  const data = await prisma.leads.findMany({
+    select: {
+      email: true,
+      source: true,
+      captured_at: true,
+      tours: { select: { slug: true } },
+    },
+    orderBy: { captured_at: "desc" },
+    take: 8,
+  });
   return data.map((l) => {
-    const tour = Array.isArray(l.tour) ? l.tour[0] : l.tour;
+    const tour = l.tours;
     return {
       email: l.email,
       source: l.source,
-      capturedAt: l.captured_at,
+      capturedAt: l.captured_at.toISOString(),
       tourSlug: tour?.slug ?? "(unknown)",
     };
   });

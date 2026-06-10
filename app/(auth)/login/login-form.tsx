@@ -1,16 +1,35 @@
 "use client";
 
-import { useActionState } from "react";
-import { loginAction, type AuthFormState } from "./actions";
-
-const initial: AuthFormState = {};
+import { useState } from "react";
+import { signIn } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 export function LoginForm({ next }: { next?: string }) {
-  const [state, formAction, pending] = useActionState(loginAction, initial);
+  const router = useRouter();
+  const [error, setError] = useState<string | undefined>();
+  const [pending, setPending] = useState(false);
+
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setPending(true);
+    setError(undefined);
+    const fd = new FormData(e.currentTarget);
+    const res = await signIn("credentials", {
+      redirect: false,
+      email: String(fd.get("email") ?? "").trim(),
+      password: String(fd.get("password") ?? ""),
+    });
+    if (res?.error) {
+      setPending(false);
+      setError("Invalid email or password.");
+      return;
+    }
+    router.push(next || "/dashboard");
+    router.refresh();
+  }
 
   return (
-    <form action={formAction} className="space-y-4">
-      <input type="hidden" name="next" value={next ?? "/dashboard"} />
+    <form onSubmit={onSubmit} className="space-y-4">
       <div>
         <label className="mb-1 block text-xs font-medium uppercase tracking-wider text-neutral-500">
           Email
@@ -43,9 +62,9 @@ export function LoginForm({ next }: { next?: string }) {
           </a>
         </div>
       </div>
-      {state.error ? (
+      {error ? (
         <p className="text-sm text-red-600" role="alert">
-          {state.error}
+          {error}
         </p>
       ) : null}
       <button

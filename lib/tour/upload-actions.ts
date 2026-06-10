@@ -17,7 +17,7 @@
 // in lib/r2/resolve.ts.
 
 import { revalidatePath } from "next/cache";
-import { createClient } from "@/lib/supabase/server";
+import { prisma } from "@/lib/db";
 import { authorizeTourAccess } from "./access";
 import {
   presignPut,
@@ -95,7 +95,6 @@ export async function requestSceneUpload(params: {
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) return { ok: false, error: access.error };
   const teamId = access.teamId;
-  const supabase = await createClient();
 
   const sceneId = randomUUID();
   const ext = extFromContentType(contentType);
@@ -106,30 +105,33 @@ export async function requestSceneUpload(params: {
   // Compute the next order_index so scenes stack in the order they're uploaded.
   let orderIndex = params.orderIndex;
   if (typeof orderIndex !== "number") {
-    const { data: existing } = await supabase
-      .from("scenes")
-      .select("order_index")
-      .eq("tour_id", tourId)
-      .order("order_index", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    const existing = await prisma.scenes.findFirst({
+      where: { tour_id: tourId },
+      orderBy: { order_index: "desc" },
+      select: { order_index: true },
+    });
     orderIndex = (existing?.order_index ?? -1) + 1;
   }
 
-  const { error: insertErr } = await supabase.from("scenes").insert({
-    id: sceneId,
-    tour_id: tourId,
-    name: sceneNameFromFilename(filename, orderIndex + 1),
-    // Store the R2 key with a scheme prefix so resolveSceneImageUrl knows to presign.
-    source_image_url: `r2:${key}`,
-    initial_yaw: 0,
-    initial_pitch: 0,
-    initial_fov: Math.PI / 2,
-    initial_roll: 0,
-    order_index: orderIndex,
-    processing_status: "pending",
-  });
-  if (insertErr) return { ok: false, error: insertErr.message };
+  try {
+    await prisma.scenes.create({
+      data: {
+        id: sceneId,
+        tour_id: tourId,
+        name: sceneNameFromFilename(filename, orderIndex + 1),
+        // Store the R2 key with a scheme prefix so resolveSceneImageUrl knows to presign.
+        source_image_url: `r2:${key}`,
+        initial_yaw: 0,
+        initial_pitch: 0,
+        initial_fov: Math.PI / 2,
+        initial_roll: 0,
+        order_index: orderIndex,
+        processing_status: "pending",
+      },
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Insert failed." };
+  }
 
   const putUrl = await presignPut(key, contentType);
   return { ok: true, sceneId, putUrl, key };
@@ -143,30 +145,26 @@ export async function completeSceneUpload(params: {
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) return { ok: false, error: access.error };
   const teamId = access.teamId;
-  const supabase = await createClient();
 
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("id, cover_scene_id")
-    .eq("id", tourId)
-    .maybeSingle();
+  const tour = await prisma.tours.findUnique({
+    where: { id: tourId },
+    select: { id: true, cover_scene_id: true },
+  });
   if (!tour) return { ok: false, error: "Tour not found." };
 
-  // Fetch the current scene row so we know the source key.
-  const { data: scene } = await supabase
-    .from("scenes")
-    .select("id, source_image_url")
-    .eq("id", sceneId)
-    .eq("tour_id", tourId)
-    .maybeSingle();
+  // Fetch the current scene row so we know the source key. Scope by tour_id so
+  // a scene from another tour can't be addressed via this tour's access grant.
+  const scene = await prisma.scenes.findFirst({
+    where: { id: sceneId, tour_id: tourId },
+    select: { id: true, source_image_url: true },
+  });
   if (!scene) return { ok: false, error: "Scene not found." };
 
   // Mark processing while we generate the WebGL-friendly version.
-  await supabase
-    .from("scenes")
-    .update({ processing_status: "processing" })
-    .eq("id", sceneId)
-    .eq("tour_id", tourId);
+  await prisma.scenes.updateMany({
+    where: { id: sceneId, tour_id: tourId },
+    data: { processing_status: "processing" },
+  });
 
   // Resize: cap width at DISPLAY_MAX_WIDTH so WebGL textures load on all GPUs.
   // We only do this for r2:-stored uploads; legacy seed scenes (pointing at
@@ -193,16 +191,21 @@ export async function completeSceneUpload(params: {
     }
   }
 
-  const { error: updErr } = await supabase
-    .from("scenes")
-    .update({ processing_status: "ready", source_image_url: displayRef })
-    .eq("id", sceneId)
-    .eq("tour_id", tourId);
-  if (updErr) return { ok: false, error: updErr.message };
+  try {
+    await prisma.scenes.updateMany({
+      where: { id: sceneId, tour_id: tourId },
+      data: { processing_status: "ready", source_image_url: displayRef },
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Update failed." };
+  }
 
   // If this is the first scene on the tour, set it as the cover.
   if (!tour.cover_scene_id) {
-    await supabase.from("tours").update({ cover_scene_id: sceneId }).eq("id", tourId);
+    await prisma.tours.update({
+      where: { id: tourId },
+      data: { cover_scene_id: sceneId },
+    });
   }
 
   revalidatePath(`/editor/${tourId}`);
@@ -225,14 +228,15 @@ export async function renameScene(params: {
 
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) return { ok: false, error: access.error };
-  const supabase = await createClient();
 
-  const { error } = await supabase
-    .from("scenes")
-    .update({ name: trimmed })
-    .eq("id", sceneId)
-    .eq("tour_id", tourId);
-  if (error) return { ok: false, error: error.message };
+  try {
+    await prisma.scenes.updateMany({
+      where: { id: sceneId, tour_id: tourId },
+      data: { name: trimmed },
+    });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Update failed." };
+  }
 
   revalidatePath(`/editor/${tourId}`);
   return { ok: true };
@@ -253,22 +257,18 @@ export async function deleteScene(params: {
   const { tourId, sceneId } = params;
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) return { ok: false, error: access.error };
-  const supabase = await createClient();
 
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("id, cover_scene_id")
-    .eq("id", tourId)
-    .maybeSingle();
+  const tour = await prisma.tours.findUnique({
+    where: { id: tourId },
+    select: { id: true, cover_scene_id: true },
+  });
   if (!tour) return { ok: false, error: "Tour not found." };
 
   // Pull the scene to learn its R2 key, then delete the row.
-  const { data: scene } = await supabase
-    .from("scenes")
-    .select("id, source_image_url")
-    .eq("id", sceneId)
-    .eq("tour_id", tourId)
-    .maybeSingle();
+  const scene = await prisma.scenes.findFirst({
+    where: { id: sceneId, tour_id: tourId },
+    select: { id: true, source_image_url: true },
+  });
 
   if (scene) {
     // Delete R2 objects best-effort. Failures here shouldn't block the DB
@@ -297,17 +297,19 @@ export async function deleteScene(params: {
     }
   }
 
-  const { error: delErr } = await supabase
-    .from("scenes")
-    .delete()
-    .eq("id", sceneId)
-    .eq("tour_id", tourId);
-  if (delErr) return { ok: false, error: delErr.message };
+  try {
+    await prisma.scenes.deleteMany({ where: { id: sceneId, tour_id: tourId } });
+  } catch (err) {
+    return { ok: false, error: err instanceof Error ? err.message : "Delete failed." };
+  }
 
   // If the deleted scene was the cover, clear it so a future load picks a
   // different first scene via rowToTour's fallback.
   if (tour.cover_scene_id === sceneId) {
-    await supabase.from("tours").update({ cover_scene_id: null }).eq("id", tourId);
+    await prisma.tours.update({
+      where: { id: tourId },
+      data: { cover_scene_id: null },
+    });
   }
 
   revalidatePath(`/editor/${tourId}`);
@@ -322,7 +324,6 @@ export async function abortSceneUpload(params: {
   const { tourId, sceneId, key } = params;
   const access = await authorizeTourAccess(tourId);
   if (!access.ok) return { ok: false, error: access.error };
-  const supabase = await createClient();
 
   // Best-effort delete from R2; even if it fails, we still drop the DB row so
   // we don't leave an orphan pending scene in the editor.
@@ -332,7 +333,7 @@ export async function abortSceneUpload(params: {
     // ignore
   }
 
-  await supabase.from("scenes").delete().eq("id", sceneId).eq("tour_id", tourId);
+  await prisma.scenes.deleteMany({ where: { id: sceneId, tour_id: tourId } });
   revalidatePath(`/editor/${tourId}`);
   return { ok: true };
 }

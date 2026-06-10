@@ -6,10 +6,10 @@
 // queries, never end up in DB backups), with a self-serve override path for
 // when the founder wants to rotate a key without redeploying.
 //
-// Server-only — the service-role client reads app_secrets, bypassing RLS.
+// Server-only — reads app_secrets directly via Prisma (global config table).
 
 import "server-only";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 export type SecretKey =
   | "STRIPE_SECRET_KEY"
@@ -45,18 +45,11 @@ export async function getSecret(key: SecretKey): Promise<string | null> {
 
   // 2. DB second
   try {
-    const supabase = createAdminClient();
-    const { data, error } = await supabase
-      .from("app_secrets")
-      .select("value")
-      .eq("key", key)
-      .maybeSingle();
-    if (error) {
-      console.error(`[secrets] DB lookup failed for ${key}:`, error.message);
-      cache.set(key, null);
-      return null;
-    }
-    const value = data?.value ?? null;
+    const row = await prisma.app_secrets.findUnique({
+      where: { key },
+      select: { value: true },
+    });
+    const value = row?.value ?? null;
     cache.set(key, value);
     return value;
   } catch (err) {
@@ -91,9 +84,8 @@ export async function requireSecret(key: SecretKey): Promise<string> {
 export async function getSecretStatus(): Promise<
   Record<SecretKey, { fromEnv: boolean; fromDb: boolean }>
 > {
-  const supabase = createAdminClient();
-  const { data } = await supabase.from("app_secrets").select("key");
-  const dbKeys = new Set((data ?? []).map((r) => r.key as SecretKey));
+  const rows = await prisma.app_secrets.findMany({ select: { key: true } });
+  const dbKeys = new Set(rows.map((r) => r.key as SecretKey));
 
   const keys: SecretKey[] = [
     "STRIPE_SECRET_KEY",

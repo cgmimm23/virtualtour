@@ -9,7 +9,7 @@
 import "server-only";
 import type Stripe from "stripe";
 import { requireStripe } from "./client";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 interface TierSpec {
   key: "solo" | "team" | "brokerage";
@@ -54,7 +54,6 @@ export interface BootstrapResult {
 
 export async function bootstrapStripeProducts(): Promise<BootstrapResult> {
   const stripe = await requireStripe();
-  const supabase = createAdminClient();
 
   const result: BootstrapResult = { created: [], reused: [] };
 
@@ -98,14 +97,18 @@ export async function bootstrapStripeProducts(): Promise<BootstrapResult> {
     }
 
     // Persist the price ID into app_secrets so checkout can resolve it.
-    await supabase.from("app_secrets").upsert(
-      {
+    await prisma.app_secrets.upsert({
+      where: { key: tier.secretKey },
+      update: {
+        value: price.id,
+        description: `${tier.name} monthly price ID`,
+      },
+      create: {
         key: tier.secretKey,
         value: price.id,
         description: `${tier.name} monthly price ID`,
       },
-      { onConflict: "key" },
-    );
+    });
 
     const entry = { tier: tier.key, productId: product.id, priceId: price.id };
     if (createdNow) result.created.push(entry);
@@ -143,7 +146,6 @@ export async function bootstrapStripeWebhook(
   webhookUrl: string,
 ): Promise<WebhookBootstrapResult> {
   const stripe = await requireStripe();
-  const supabase = createAdminClient();
 
   // Look for an existing webhook at the same URL.
   const existing = await stripe.webhookEndpoints.list({ limit: 100 });
@@ -157,11 +159,10 @@ export async function bootstrapStripeWebhook(
     // already have it stored in app_secrets, reuse the existing endpoint.
     // Otherwise we have to delete + recreate to get a fresh secret we can
     // capture.
-    const { data: existingSecret } = await supabase
-      .from("app_secrets")
-      .select("value")
-      .eq("key", "STRIPE_WEBHOOK_SECRET")
-      .maybeSingle();
+    const existingSecret = await prisma.app_secrets.findUnique({
+      where: { key: "STRIPE_WEBHOOK_SECRET" },
+      select: { value: true },
+    });
     const haveSecret = Boolean(existingSecret?.value);
 
     if (haveSecret) {
@@ -200,14 +201,18 @@ export async function bootstrapStripeWebhook(
     };
   }
 
-  await supabase.from("app_secrets").upsert(
-    {
+  await prisma.app_secrets.upsert({
+    where: { key: "STRIPE_WEBHOOK_SECRET" },
+    update: {
+      value: endpoint.secret,
+      description: "Stripe webhook signing secret (auto-provisioned)",
+    },
+    create: {
       key: "STRIPE_WEBHOOK_SECRET",
       value: endpoint.secret,
       description: "Stripe webhook signing secret (auto-provisioned)",
     },
-    { onConflict: "key" },
-  );
+  });
 
   return {
     endpointId: endpoint.id,

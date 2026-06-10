@@ -6,7 +6,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { answerBuyerQuestion, type VisionAttachment } from "@/lib/ai/chatbot";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 import { resolveImageUrl } from "@/lib/r2/resolve";
 
 const Body = z.object({
@@ -26,32 +26,28 @@ export async function POST(req: Request) {
     );
   }
 
-  const supabase = createAdminClient();
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("*")
-    .eq("slug", parsed.data.tourSlug)
-    .eq("status", "published")
-    .maybeSingle();
+  const tour = await prisma.tours.findFirst({
+    where: { slug: parsed.data.tourSlug, status: "published" },
+  });
   if (!tour) return NextResponse.json({ error: "tour not found" }, { status: 404 });
 
   // Scenes + hotspots. The hotspot label / payload text is often the highest-
   // signal content the agent has authored ("new appliances 2023", "Bosch
   // dishwasher"). Two queries because PostgREST can't disambiguate hotspot
   // relations cleanly here; faster + simpler to just stitch in JS.
-  const { data: scenes } = await supabase
-    .from("scenes")
-    .select("id, name, floor, order_index, source_image_url")
-    .eq("tour_id", tour.id)
-    .order("order_index");
-  const sceneIds = (scenes ?? []).map((s) => s.id);
-  const { data: hotspotsRaw } =
+  const scenes = await prisma.scenes.findMany({
+    where: { tour_id: tour.id },
+    select: { id: true, name: true, floor: true, order_index: true, source_image_url: true },
+    orderBy: { order_index: "asc" },
+  });
+  const sceneIds = scenes.map((s) => s.id);
+  const hotspotsRaw =
     sceneIds.length > 0
-      ? await supabase
-          .from("hotspots")
-          .select("scene_id, label, type, payload")
-          .in("scene_id", sceneIds)
-      : { data: [] as Array<{ scene_id: string; label: string; type: string; payload: unknown }> };
+      ? await prisma.hotspots.findMany({
+          where: { scene_id: { in: sceneIds } },
+          select: { scene_id: true, label: true, type: true, payload: true },
+        })
+      : [];
   const hotspotsByScene = new Map<string, Array<{ label: string; type: string; payload: unknown }>>();
   for (const h of hotspotsRaw ?? []) {
     if (!hotspotsByScene.has(h.scene_id)) hotspotsByScene.set(h.scene_id, []);
@@ -77,12 +73,10 @@ export async function POST(req: Request) {
   };
 
   // Load or create the chat session.
-  const { data: existing } = await supabase
-    .from("tour_chats")
-    .select("id, messages, email, name, message_count")
-    .eq("tour_id", tour.id)
-    .eq("session_id", parsed.data.sessionId)
-    .maybeSingle();
+  const existing = await prisma.tour_chats.findUnique({
+    where: { tour_id_session_id: { tour_id: tour.id, session_id: parsed.data.sessionId } },
+    select: { id: true, messages: true, email: true, name: true, message_count: true },
+  });
 
   const history: Array<{ role: "user" | "assistant"; content: string }> = Array.isArray(
     existing?.messages,
@@ -167,45 +161,47 @@ export async function POST(req: Request) {
   const upsertName = parsed.data.name ?? existing?.name ?? null;
 
   if (existing) {
-    await supabase
-      .from("tour_chats")
-      .update({
+    await prisma.tour_chats.update({
+      where: { id: existing.id },
+      data: {
         messages: history,
         message_count: (existing.message_count ?? 0) + 2,
         email: upsertEmail,
         name: upsertName,
-      })
-      .eq("id", existing.id);
+      },
+    });
   } else {
-    await supabase.from("tour_chats").insert({
-      tour_id: tour.id,
-      session_id: parsed.data.sessionId,
-      messages: history,
-      message_count: 2,
-      email: upsertEmail,
-      name: upsertName,
-      user_agent: req.headers.get("user-agent"),
-      referrer: req.headers.get("referer"),
+    await prisma.tour_chats.create({
+      data: {
+        tour_id: tour.id,
+        session_id: parsed.data.sessionId,
+        messages: history,
+        message_count: 2,
+        email: upsertEmail,
+        name: upsertName,
+        user_agent: req.headers.get("user-agent"),
+        referrer: req.headers.get("referer"),
+      },
     });
   }
 
   // If the buyer just left their email AND we don't already have a lead for
   // them on this tour, write one.
   if (parsed.data.email && !existing?.email) {
-    const { data: dupe } = await supabase
-      .from("leads")
-      .select("id")
-      .eq("tour_id", tour.id)
-      .eq("email", parsed.data.email)
-      .maybeSingle();
+    const dupe = await prisma.leads.findFirst({
+      where: { tour_id: tour.id, email: parsed.data.email },
+      select: { id: true },
+    });
     if (!dupe) {
-      await supabase.from("leads").insert({
-        tour_id: tour.id,
-        email: parsed.data.email,
-        name: parsed.data.name ?? null,
-        source: "in_scene_contact", // closest existing source value
-        scenes_viewed: 0,
-        duration_ms: 0,
+      await prisma.leads.create({
+        data: {
+          tour_id: tour.id,
+          email: parsed.data.email,
+          name: parsed.data.name ?? null,
+          source: "in_scene_contact", // closest existing source value
+          scenes_viewed: 0,
+          duration_ms: 0,
+        },
       });
     }
   }

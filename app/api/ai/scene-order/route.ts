@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { suggestSceneOrder } from "@/lib/ai/scene-order";
 import { getUser, isPlatformAdmin } from "@/lib/auth";
-import { createAdminClient } from "@/lib/supabase/admin";
+import { prisma } from "@/lib/db";
 
 const Body = z.object({ tourId: z.string().uuid() });
 
@@ -21,32 +21,28 @@ export async function POST(req: Request) {
     );
   }
 
-  const supabase = createAdminClient();
-  const { data: tour } = await supabase
-    .from("tours")
-    .select("id, team_id")
-    .eq("id", parsed.data.tourId)
-    .maybeSingle();
+  const tour = await prisma.tours.findUnique({
+    where: { id: parsed.data.tourId },
+    select: { id: true, team_id: true },
+  });
   if (!tour) return NextResponse.json({ error: "tour not found" }, { status: 404 });
 
   const admin = await isPlatformAdmin();
   if (!admin) {
-    const { data: membership } = await supabase
-      .from("team_members")
-      .select("role")
-      .eq("user_id", user.id)
-      .eq("team_id", tour.team_id)
-      .maybeSingle();
+    const membership = await prisma.team_members.findUnique({
+      where: { team_id_user_id: { team_id: tour.team_id, user_id: user.id } },
+      select: { role: true },
+    });
     if (!membership) {
       return NextResponse.json({ error: "forbidden" }, { status: 403 });
     }
   }
 
-  const { data: scenes } = await supabase
-    .from("scenes")
-    .select("id, name, floor, order_index")
-    .eq("tour_id", tour.id)
-    .order("order_index");
+  const scenes = await prisma.scenes.findMany({
+    where: { tour_id: tour.id },
+    select: { id: true, name: true, floor: true, order_index: true },
+    orderBy: { order_index: "asc" },
+  });
 
   try {
     const orderedIds = await suggestSceneOrder(
