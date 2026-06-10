@@ -21,3 +21,4 @@ next-env.d.ts.bak
 # .claude/settings.json (no .local) and stay tracked.
 .claude/settings.local.json
 
+package-lock.json
