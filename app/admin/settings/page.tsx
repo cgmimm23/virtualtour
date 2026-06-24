@@ -81,9 +81,14 @@ const SECRET_GROUPS: Array<{
   },
 ];
 
-export default async function AdminSettings() {
-  await requirePlatformAdmin("/admin/settings");
+export default async function AdminSettings({
+  searchParams,
+}: {
+  searchParams: Promise<{ pw_ok?: string; pw_error?: string }>;
+}) {
+  const user = await requirePlatformAdmin("/admin/settings");
   const status = await getSecretStatus();
+  const sp = await searchParams;
 
   return (
     <div className="mx-auto max-w-4xl px-6 py-8">
@@ -99,6 +104,56 @@ export default async function AdminSettings() {
           ← Overview
         </Link>
       </div>
+
+      {/* Change your admin password */}
+      <section className="mb-8 rounded-xl border border-neutral-200 bg-white p-6">
+        <h2 className="text-lg font-semibold">Change password</h2>
+        <p className="mt-1 text-sm text-neutral-500">
+          Update the password for your admin account ({user.email}).
+        </p>
+        {sp.pw_ok ? (
+          <p className="mt-3 rounded-md bg-green-50 px-3 py-2 text-sm text-green-700">
+            Password updated.
+          </p>
+        ) : null}
+        {sp.pw_error ? (
+          <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-700">{sp.pw_error}</p>
+        ) : null}
+        <form
+          action="/admin/settings/change-password"
+          method="post"
+          className="mt-4 flex flex-wrap items-end gap-3"
+        >
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-neutral-600">New password</span>
+            <input
+              name="password"
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              className="rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-sm">
+            <span className="text-neutral-600">Confirm</span>
+            <input
+              name="confirm"
+              type="password"
+              required
+              minLength={8}
+              autoComplete="new-password"
+              className="rounded-md border border-neutral-300 px-3 py-2 text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            className="rounded-md bg-brand-600 px-4 py-2 text-sm font-medium text-white hover:bg-brand-700"
+          >
+            Update password
+          </button>
+        </form>
+      </section>
 
       <div className="space-y-8">
         {SECRET_GROUPS.map((group) => (
