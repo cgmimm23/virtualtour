@@ -4,30 +4,18 @@
 // of crashing the request that triggered the email.
 
 import "server-only";
-import { Resend } from "resend";
-import { getSecret } from "@/lib/secrets";
+import { spawn } from "child_process";
 
-let cached: { key: string; client: Resend } | null = null;
-
-export async function getResend(): Promise<Resend | null> {
-  const key = await getSecret("RESEND_API_KEY");
-  if (!key) return null;
-  if (cached?.key === key) return cached.client;
-  const client = new Resend(key);
-  cached = { key, client };
-  return client;
-}
+// Self-hosted Postfix on this box (DKIM-signed for cgmimm.com). Replaces Resend.
+const FROM = "VITA tours <no-reply@cgmimm.com>";
 
 export async function getFromAddress(): Promise<string> {
-  return (
-    (await getSecret("RESEND_FROM_EMAIL")) ?? "VITA tours <no-reply@virtualtour.cgmimm.com>"
-  );
+  return FROM;
 }
 
 /**
- * Best-effort email send. Logs and returns false if Resend isn't configured
- * or the API rejects — never throws, because the caller is usually inside a
- * user-facing flow we don't want to break over a missing notification.
+ * Best-effort email send via the local Postfix (DKIM-signed). Never throws —
+ * the caller is usually inside a user-facing flow we don't want to break.
  */
 export async function sendEmail(params: {
   to: string | string[];
@@ -37,31 +25,30 @@ export async function sendEmail(params: {
   replyTo?: string;
   tags?: { name: string; value: string }[];
 }): Promise<boolean> {
-  const resend = await getResend();
-  if (!resend) {
-    console.warn(`[email] RESEND_API_KEY not set — skipping "${params.subject}"`);
-    return false;
-  }
-  const from = await getFromAddress();
-  try {
-    const { error } = await resend.emails.send({
-      from,
-      to: Array.isArray(params.to) ? params.to : [params.to],
-      subject: params.subject,
-      html: params.html,
-      text: params.text,
-      replyTo: params.replyTo,
-      tags: params.tags,
-    });
-    if (error) {
-      console.error("[email] Resend rejected:", error);
-      return false;
+  const to = Array.isArray(params.to) ? params.to.join(", ") : params.to;
+  const headers = [
+    `From: ${FROM}`,
+    `To: ${to}`,
+    `Subject: ${params.subject}`,
+    "MIME-Version: 1.0",
+    "Content-Type: text/html; charset=utf-8",
+  ];
+  if (params.replyTo) headers.push(`Reply-To: ${params.replyTo}`);
+  const msg = [...headers, "", params.html].join("\r\n");
+  return new Promise<boolean>((resolve) => {
+    try {
+      const sm = spawn("/usr/sbin/sendmail", ["-t", "-i", "-f", "no-reply@cgmimm.com"]);
+      sm.on("error", (e) => {
+        console.error("[email] sendmail error:", e);
+        resolve(false);
+      });
+      sm.on("close", (code) => resolve(code === 0));
+      sm.stdin.end(msg);
+    } catch (err) {
+      console.error("[email] sendmail threw:", err);
+      resolve(false);
     }
-    return true;
-  } catch (err) {
-    console.error("[email] Resend threw:", err);
-    return false;
-  }
+  });
 }
 
 /** Trivial HTML escape for interpolating user-controlled values. */
